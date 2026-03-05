@@ -1,0 +1,53 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build cli",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/PostgresDeployer.Cli/PostgresDeployer.Cli.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoColor"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build wpf",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/PostgresDeployer.Wpf/PostgresDeployer.Wpf.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoColor"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "watch cli",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "watch",
+                "run",
+                "--project",
+                "${workspaceFolder}/src/PostgresDeployer.Cli/PostgresDeployer.Cli.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build all",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/PostgresDeployer.sln",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoColor"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

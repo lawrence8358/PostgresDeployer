@@ -1,0 +1,97 @@
+<UserControl x:Class="PostgresDeployer.Wpf.Views.LogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:svc="clr-namespace:PostgresDeployer.Wpf.Services"
+             xmlns:l="clr-namespace:PostgresDeployer.Wpf.Extensions"
+             mc:Ignorable="d">
+
+    <DockPanel Margin="24,20,24,20">
+
+        <!-- 頁面標題 + 工具列 -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="{l:Loc Log_Title}" FontSize="22" FontWeight="SemiBold"
+                       Foreground="{DynamicResource PrimaryTextBrush}"
+                       VerticalAlignment="Center"/>
+
+            <!-- 工具列（篩選 + 操作） -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{l:Loc Log_Filter}"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Margin="0,0,6,0"/>
+                <ComboBox ItemsSource="{Binding FilterOptions}"
+                          SelectedItem="{Binding SelectedFilter}"
+                          Width="100" Height="32"
+                          Margin="0,0,12,0"/>
+                <Button Content="{l:Loc Log_Clear}"
+                        Command="{Binding ClearLogCommand}"
+                        Height="32" Padding="12,0" Margin="0,0,6,0"/>
+                <Button Content="{l:Loc Log_Copy}"
+                        Command="{Binding CopyLogCommand}"
+                        Height="32" Padding="12,0" Margin="0,0,6,0"/>
+                <Button Content="{l:Loc Log_Export}"
+                        Style="{StaticResource ButtonPrimary}"
+                        Command="{Binding ExportLogCommand}"
+                        Height="32" Padding="12,0"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- 日誌卡片 -->
+        <hc:Card Padding="0">
+            <ListView ItemsSource="{Binding FilteredEntries}"
+                      x:Name="LogList"
+                      BorderThickness="0"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="{Binding [Log_ColTime], Source={x:Static svc:LocalizationService.Instance}}"
+                                        Width="90">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
+                                               FontFamily="Cascadia Code,Consolas,monospace"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource SecondaryTextBrush}"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="{Binding [Log_ColLevel], Source={x:Static svc:LocalizationService.Instance}}"
+                                        Width="70">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <hc:Tag Content="{Binding Level}"
+                                            ShowCloseButton="False"
+                                            Padding="6,1"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="{Binding [Log_ColMessage], Source={x:Static svc:LocalizationService.Instance}}"
+                                        Width="680">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Message}"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontSize="12"/>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </hc:Card>
+
+    </DockPanel>
+</UserControl>

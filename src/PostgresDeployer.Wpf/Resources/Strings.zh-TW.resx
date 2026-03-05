@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace"/>
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string"/>
+              <xsd:attribute name="name" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- Navigation -->
+  <data name="Nav_Settings" xml:space="preserve"><value>⚙  設定</value></data>
+  <data name="Nav_Deploy" xml:space="preserve"><value>🚀  部署</value></data>
+  <data name="Nav_Log" xml:space="preserve"><value>📋  日誌</value></data>
+
+  <!-- App header -->
+  <data name="App_Subtitle" xml:space="preserve"><value>PostgreSQL Schema 部署工具</value></data>
+  <data name="App_Version" xml:space="preserve"><value>PostgresDeployer 版本 {0}</value></data>
+
+  <!-- Language switcher -->
+  <data name="Lang_Language" xml:space="preserve"><value>語言</value></data>
+
+  <!-- Settings page -->
+  <data name="Settings_Title" xml:space="preserve"><value>設定</value></data>
+  <data name="Settings_Connection" xml:space="preserve"><value>🔌  連線設定</value></data>
+  <data name="Settings_Host" xml:space="preserve"><value>主機</value></data>
+  <data name="Settings_Port" xml:space="preserve"><value>連接埠</value></data>
+  <data name="Settings_Database" xml:space="preserve"><value>資料庫名稱</value></data>
+  <data name="Settings_Username" xml:space="preserve"><value>使用者名稱</value></data>
+  <data name="Settings_Password" xml:space="preserve"><value>密碼</value></data>
+  <data name="Settings_TestConnection" xml:space="preserve"><value>測試連線</value></data>
+  <data name="Settings_SqlPaths" xml:space="preserve"><value>📁  SQL 檔案路徑</value></data>
+  <data name="Settings_Browse" xml:space="preserve"><value>瀏覽...</value></data>
+  <data name="Settings_SchemaFolder" xml:space="preserve"><value>Schema 資料夾</value></data>
+  <data name="Settings_InitDataFolder" xml:space="preserve"><value>初始資料資料夾</value></data>
+  <data name="Settings_ExtPlaceholder" xml:space="preserve"><value>輸入 extension 名稱...</value></data>
+  <data name="Settings_ExtAdd" xml:space="preserve"><value>+ 新增</value></data>
+  <data name="Settings_ExtTooltipLine1" xml:space="preserve"><value>指定部署前需自動安裝的 PostgreSQL Extension（模組）。</value></data>
+  <data name="Settings_ExtTooltipLine2" xml:space="preserve"><value>每個 Extension 會在所有 Schema 物件部署</value></data>
+  <data name="Settings_ExtTooltipBefore" xml:space="preserve"><value>之前</value></data>
+  <data name="Settings_ExtTooltipLine3" xml:space="preserve"><value>優先執行：</value></data>
+  <data name="Settings_ExtTooltipLine4" xml:space="preserve"><value>確保後續 SQL 可使用 Extension 提供的型別、函式與運算子。</value></data>
+  <data name="Settings_ExtTooltipExamples" xml:space="preserve"><value>常見範例：</value></data>
+  <data name="Settings_ExtTooltipPgcrypto" xml:space="preserve"><value>— 加密函式（gen_random_uuid、crypt）</value></data>
+  <data name="Settings_ExtTooltipPostgis" xml:space="preserve"><value>— 地理空間型別與函式</value></data>
+  <data name="Settings_ExtTooltipUuidOssp" xml:space="preserve"><value>— UUID 產生函式</value></data>
+  <data name="Settings_ExtTooltipPgTrgm" xml:space="preserve"><value>— 字串相似度搜尋</value></data>
+  <data name="Settings_DeployOptions" xml:space="preserve"><value>⚡  部署選項</value></data>
+  <data name="Settings_SeedData" xml:space="preserve"><value>執行初始資料腳本（Seed Data）</value></data>
+  <data name="Settings_StopOnError" xml:space="preserve"><value>發生錯誤時停止</value></data>
+  <data name="Settings_Load" xml:space="preserve"><value>📂  載入設定</value></data>
+  <data name="Settings_Save" xml:space="preserve"><value>💾  儲存</value></data>
+  <data name="Settings_SaveAs" xml:space="preserve"><value>📄  另存新檔</value></data>
+  <data name="Settings_RecentFiles" xml:space="preserve"><value>🕐  最近使用</value></data>
+
+  <!-- Deploy page -->
+  <data name="Deploy_Title" xml:space="preserve"><value>部署</value></data>
+  <data name="Deploy_Analyze" xml:space="preserve"><value>🔍  分析差異</value></data>
+  <data name="Deploy_Execute" xml:space="preserve"><value>🚀  執行部署</value></data>
+  <data name="Deploy_Cancel" xml:space="preserve"><value>✕  取消</value></data>
+  <data name="Deploy_ChangeList" xml:space="preserve"><value>📝  變更清單</value></data>
+  <data name="Deploy_SqlPreview" xml:space="preserve"><value>🗒  SQL 預覽</value></data>
+
+  <!-- Log page -->
+  <data name="Log_Title" xml:space="preserve"><value>日誌</value></data>
+  <data name="Log_Filter" xml:space="preserve"><value>篩選：</value></data>
+  <data name="Log_FilterAll" xml:space="preserve"><value>全部</value></data>
+  <data name="Log_Clear" xml:space="preserve"><value>🗑  清除</value></data>
+  <data name="Log_Copy" xml:space="preserve"><value>📋  複製</value></data>
+  <data name="Log_Export" xml:space="preserve"><value>📤  匯出</value></data>
+  <data name="Log_ColTime" xml:space="preserve"><value>時間</value></data>
+  <data name="Log_ColLevel" xml:space="preserve"><value>層級</value></data>
+  <data name="Log_ColMessage" xml:space="preserve"><value>訊息</value></data>
+
+  <!-- Status messages -->
+  <data name="Status_Ready" xml:space="preserve"><value>就緒</value></data>
+  <data name="Status_Analyzing" xml:space="preserve"><value>正在分析 Schema 差異...</value></data>
+  <data name="Status_AnalyzeComplete" xml:space="preserve"><value>分析完成: {0} 語句, {1} 注意事項</value></data>
+  <data name="Status_AnalyzeFailed" xml:space="preserve"><value>分析失敗: {0}</value></data>
+  <data name="Status_DeployAllOk" xml:space="preserve"><value>部署完成！{0} 個群組全部成功。</value></data>
+  <data name="Status_DeployPartial" xml:space="preserve"><value>部署完成：{0} 成功, {1} 失敗。</value></data>
+  <data name="Status_Canceled" xml:space="preserve"><value>部署已取消。</value></data>
+  <data name="Status_DeployFailed" xml:space="preserve"><value>部署失敗: {0}</value></data>
+  <data name="Status_Canceling" xml:space="preserve"><value>正在取消部署...</value></data>
+  <data name="Status_TestingConn" xml:space="preserve"><value>正在測試連線...</value></data>
+  <data name="Status_ConnSuccess" xml:space="preserve"><value>✓ 連線成功</value></data>
+  <data name="Status_ConnFailed" xml:space="preserve"><value>✗ 連線失敗</value></data>
+  <data name="Status_ConnFailedWith" xml:space="preserve"><value>✗ 連線失敗: {0}</value></data>
+
+  <!-- Change groups -->
+  <data name="Group_NewTables" xml:space="preserve"><value>新建資料表</value></data>
+  <data name="Group_TableChanges" xml:space="preserve"><value>資料表變更</value></data>
+  <data name="Group_Indexes" xml:space="preserve"><value>索引</value></data>
+  <data name="Group_Cautions" xml:space="preserve"><value>注意事項</value></data>
+  <data name="Group_Statement" xml:space="preserve"><value>語句 {0}</value></data>
+
+  <!-- Dialog titles and messages -->
+  <data name="Dialog_ConfirmDeploy" xml:space="preserve"><value>確定要執行部署嗎？此操作將修改資料庫 Schema。</value></data>
+  <data name="Dialog_ConfirmDeployTitle" xml:space="preserve"><value>確認部署</value></data>
+  <data name="Dialog_DeployResult" xml:space="preserve"><value>部署結果</value></data>
+  <data name="Dialog_LoadSettings" xml:space="preserve"><value>載入設定檔</value></data>
+  <data name="Dialog_SaveSettings" xml:space="preserve"><value>另存設定檔</value></data>
+  <data name="Dialog_SelectSchemaFolder" xml:space="preserve"><value>選擇 Schema 資料夾</value></data>
+  <data name="Dialog_SelectInitDataFolder" xml:space="preserve"><value>選擇初始資料資料夾</value></data>
+  <data name="Dialog_ExportLog" xml:space="preserve"><value>匯出日誌</value></data>
+  <data name="Dialog_JsonFilter" xml:space="preserve"><value>JSON 設定檔|*.json|所有檔案|*.*</value></data>
+  <data name="Dialog_JsonFilterSave" xml:space="preserve"><value>JSON 設定檔|*.json</value></data>
+  <data name="Dialog_TxtFilter" xml:space="preserve"><value>文字檔|*.txt|所有檔案|*.*</value></data>
+
+  <!-- Common / Errors -->
+  <data name="Common_Error" xml:space="preserve"><value>錯誤</value></data>
+  <data name="Error_LoadSettings" xml:space="preserve"><value>載入設定檔失敗: {0}</value></data>
+  <data name="Error_SaveSettings" xml:space="preserve"><value>儲存設定檔失敗: {0}</value></data>
+  <data name="Error_FileNotFound" xml:space="preserve"><value>檔案不存在: {0}</value></data>
+  <data name="Error_ExportLog" xml:space="preserve"><value>匯出日誌失敗: {0}</value></data>
+</root>

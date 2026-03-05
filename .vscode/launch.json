@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug CLI",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build cli",
+            "program": "${workspaceFolder}/src/PostgresDeployer.Cli/bin/Debug/net8.0/PostgresDeployer.Cli.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/PostgresDeployer.Cli",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Debug WPF",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build wpf",
+            "program": "${workspaceFolder}/src/PostgresDeployer.Wpf/bin/Debug/net8.0-windows/PostgresDeployer.Wpf.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/PostgresDeployer.Wpf",
+            "console": "internalConsole",
+            "justMyCode": true
+        }
+    ]
+}

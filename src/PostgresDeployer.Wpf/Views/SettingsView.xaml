@@ -1,0 +1,346 @@
+<UserControl x:Class="PostgresDeployer.Wpf.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:converters="clr-namespace:PostgresDeployer.Wpf.Converters"
+             xmlns:l="clr-namespace:PostgresDeployer.Wpf.Extensions"
+             mc:Ignorable="d">
+    <UserControl.Resources>
+        <converters:InvertBoolConverter x:Key="InvertBoolConverter"/>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,20,24,24" MaxWidth="800">
+
+            <!-- 頁面標題 -->
+            <TextBlock Text="{l:Loc Settings_Title}" FontSize="22" FontWeight="SemiBold"
+                       Foreground="{DynamicResource PrimaryTextBrush}"
+                       Margin="0,0,0,20"/>
+
+            <!-- ── 連線設定 ── -->
+            <hc:Card Margin="0,0,0,16" Padding="0">
+                <StackPanel>
+                    <Border Background="{DynamicResource PrimaryBrush}"
+                            CornerRadius="4,4,0,0" Padding="16,10">
+                        <TextBlock Text="{l:Loc Settings_Connection}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="White"/>
+                    </Border>
+
+                    <Grid Margin="16,16,16,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="160"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="16"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Host + Port 同行 -->
+                        <hc:TextBox Grid.Row="0" Grid.Column="0"
+                                    Text="{Binding Host, UpdateSourceTrigger=PropertyChanged}"
+                                    hc:InfoElement.Title="{l:Loc Settings_Host}"
+                                    hc:InfoElement.Placeholder="localhost"/>
+                        <hc:TextBox Grid.Row="0" Grid.Column="2"
+                                    Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}"
+                                    hc:InfoElement.Title="{l:Loc Settings_Port}"
+                                    hc:InfoElement.Placeholder="5432"/>
+
+                        <!-- Database -->
+                        <hc:TextBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                    Text="{Binding Database, UpdateSourceTrigger=PropertyChanged}"
+                                    hc:InfoElement.Title="{l:Loc Settings_Database}"
+                                    hc:InfoElement.Placeholder="myDatabase"/>
+
+                        <!-- Username -->
+                        <hc:TextBox Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3"
+                                    Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                                    hc:InfoElement.Title="{l:Loc Settings_Username}"
+                                    hc:InfoElement.Placeholder="postgres"/>
+
+                        <!-- 分隔線 -->
+                        <Separator Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,4"/>
+
+                        <!-- 密碼 + 測試連線按鈕 -->
+                        <Grid Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{l:Loc Settings_Password}"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource PrimaryTextBrush}"
+                                           Margin="0,0,0,6"/>
+                                <PasswordBox x:Name="PwdBox"
+                                             PasswordChanged="PasswordBox_PasswordChanged"/>
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Content="{l:Loc Settings_TestConnection}"
+                                    Style="{StaticResource ButtonPrimary}"
+                                    VerticalAlignment="Bottom"
+                                    Padding="16,0"
+                                    Command="{Binding TestConnectionCommand}"
+                                    IsEnabled="{Binding IsTestingConnection, Converter={StaticResource InvertBoolConverter}}"/>
+                        </Grid>
+
+                        <!-- 連線狀態 -->
+                        <TextBlock Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="3"
+                                   Text="{Binding ConnectionStatus}"
+                                   FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource PrimaryBrush}"/>
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- ── SQL 檔案路徑 ── -->
+            <hc:Card Margin="0,0,0,16" Padding="0">
+                <StackPanel>
+                    <Border Background="{DynamicResource SecondaryRegionBrush}"
+                            CornerRadius="4,4,0,0" Padding="16,10"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock Text="{l:Loc Settings_SqlPaths}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
+                    </Border>
+
+                    <Grid Margin="16,16,16,12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Schema -->
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Text="{l:Loc Settings_SchemaFolder}"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                       Margin="0,0,0,6"/>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right"
+                                        Content="{l:Loc Settings_Browse}"
+                                        Width="80"
+                                        Margin="8,0,0,0"
+                                        Command="{Binding BrowseSchemaPathCommand}"/>
+                                <hc:TextBox Text="{Binding SchemaPath, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                        </StackPanel>
+
+                        <!-- InitData -->
+                        <StackPanel Grid.Row="2">
+                            <TextBlock Text="{l:Loc Settings_InitDataFolder}"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                       Margin="0,0,0,6"/>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right"
+                                        Content="{l:Loc Settings_Browse}"
+                                        Width="80"
+                                        Margin="8,0,0,0"
+                                        Command="{Binding BrowseInitDataPathCommand}"/>
+                                <hc:TextBox Text="{Binding InitDataPath, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- ── Extensions ── -->
+            <hc:Card Margin="0,0,0,16" Padding="0">
+                <StackPanel>
+                    <Border Background="{DynamicResource SecondaryRegionBrush}"
+                            CornerRadius="4,4,0,0" Padding="16,10"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="🧩  PostgreSQL Extensions"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PrimaryTextBrush}"
+                                       VerticalAlignment="Center"/>
+                            <!-- Info 圖示：ToolTip 掛在 Border 上以獲得完整圓圈觸發範圍 -->
+                            <Border Width="17" Height="17"
+                                    Background="{DynamicResource PrimaryBrush}"
+                                    CornerRadius="9"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Cursor="Help"
+                                    ToolTipService.InitialShowDelay="200"
+                                    ToolTipService.ShowDuration="30000"
+                                    ToolTipService.Placement="Bottom">
+                                <Border.ToolTip>
+                                    <ToolTip MaxWidth="400" Padding="12,10">
+                                        <StackPanel>
+                                            <TextBlock Text="🧩  PostgreSQL Extensions"
+                                                       FontWeight="SemiBold" FontSize="13"
+                                                       Margin="0,0,0,8"/>
+                                            <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="20">
+                                                <Run Text="{l:Loc Settings_ExtTooltipLine1}"/>
+                                                <LineBreak/>
+                                                <Run Text="{l:Loc Settings_ExtTooltipLine2}"/>
+                                                <Run Text=" "/>
+                                                <Run FontWeight="SemiBold" Text="{l:Loc Settings_ExtTooltipBefore}"/>
+                                                <Run Text=" "/>
+                                                <Run Text="{l:Loc Settings_ExtTooltipLine3}"/>
+                                            </TextBlock>
+                                            <Border Background="#1E000000" CornerRadius="4"
+                                                    Padding="10,6" Margin="0,8,0,8">
+                                                <TextBlock Text="CREATE EXTENSION IF NOT EXISTS &quot;extension_name&quot;;"
+                                                           FontFamily="Consolas" FontSize="11"/>
+                                            </Border>
+                                            <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="20"
+                                                       Text="{l:Loc Settings_ExtTooltipLine4}"
+                                                       Margin="0,0,0,8"/>
+                                            <TextBlock Text="{l:Loc Settings_ExtTooltipExamples}"
+                                                       FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                            <TextBlock FontSize="12" LineHeight="22">
+                                                <Run>• </Run><Run FontFamily="Consolas">pgcrypto</Run><Run Text="{l:Loc Settings_ExtTooltipPgcrypto}"/><LineBreak/>
+                                                <Run>• </Run><Run FontFamily="Consolas">postgis</Run><Run Text="{l:Loc Settings_ExtTooltipPostgis}"/><LineBreak/>
+                                                <Run>• </Run><Run FontFamily="Consolas">uuid-ossp</Run><Run Text="{l:Loc Settings_ExtTooltipUuidOssp}"/><LineBreak/>
+                                                <Run>• </Run><Run FontFamily="Consolas">pg_trgm</Run><Run Text="{l:Loc Settings_ExtTooltipPgTrgm}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </ToolTip>
+                                </Border.ToolTip>
+                                <TextBlock Text="i"
+                                           FontSize="11" FontStyle="Italic" FontWeight="Bold"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Margin="16,12,16,12">
+                        <!-- Extension Tags -->
+                        <ItemsControl ItemsSource="{Binding Extensions}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <hc:Tag Content="{Binding}"
+                                            Margin="0,0,6,6"
+                                            ShowCloseButton="True"
+                                            Closed="ExtensionTag_Closed"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- 新增 Extension -->
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <hc:TextBox Text="{Binding NewExtension, UpdateSourceTrigger=PropertyChanged}"
+                                        Width="220"
+                                        hc:InfoElement.Placeholder="{l:Loc Settings_ExtPlaceholder}"/>
+                            <Button Content="{l:Loc Settings_ExtAdd}"
+                                    Style="{StaticResource ButtonSuccess}"
+                                    Command="{Binding AddExtensionCommand}"
+                                    Margin="8,0,0,0" Padding="16,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- ── 選項 ── -->
+            <hc:Card Margin="0,0,0,16" Padding="0">
+                <StackPanel>
+                    <Border Background="{DynamicResource SecondaryRegionBrush}"
+                            CornerRadius="4,4,0,0" Padding="16,10"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock Text="{l:Loc Settings_DeployOptions}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
+                    </Border>
+
+                    <StackPanel Margin="16,12,16,12">
+                        <CheckBox Content="{l:Loc Settings_SeedData}"
+                                  IsChecked="{Binding ExecuteSeedData}"
+                                  Margin="0,0,0,8"/>
+                        <CheckBox Content="{l:Loc Settings_StopOnError}"
+                                  IsChecked="{Binding StopOnError}"/>
+                    </StackPanel>
+                </StackPanel>
+            </hc:Card>
+
+            <!-- ── 操作按鈕 ── -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                <Button Content="{l:Loc Settings_Load}"
+                        Command="{Binding LoadSettingsCommand}"
+                        Padding="16,0" Margin="0,0,8,0"/>
+                <Button Content="{l:Loc Settings_Save}"
+                        Style="{StaticResource ButtonPrimary}"
+                        Command="{Binding SaveSettingsCommand}"
+                        Padding="16,0" Margin="0,0,8,0"/>
+                <Button Content="{l:Loc Settings_SaveAs}"
+                        Command="{Binding SaveSettingsAsCommand}"
+                        Padding="16,0"/>
+            </StackPanel>
+
+            <!-- ── 最近使用 ── -->
+            <hc:Card Padding="0">
+                <StackPanel>
+                    <Border Background="{DynamicResource SecondaryRegionBrush}"
+                            CornerRadius="4,4,0,0" Padding="16,10"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock Text="{l:Loc Settings_RecentFiles}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PrimaryTextBrush}"/>
+                    </Border>
+
+                    <ListBox ItemsSource="{Binding RecentFiles}"
+                             MaxHeight="140"
+                             BorderThickness="0"
+                             Margin="4">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="12,8"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" TextTrimming="CharacterEllipsis">
+                                        <Hyperlink Command="{Binding DataContext.LoadRecentFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                   CommandParameter="{Binding}">
+                                            <Run Text="{Binding Path, Mode=OneWay}"/>
+                                        </Hyperlink>
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding LastUsed, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Margin="12,0,0,0"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </hc:Card>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

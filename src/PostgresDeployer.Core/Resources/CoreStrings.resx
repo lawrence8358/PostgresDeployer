@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace"/>
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string"/>
+              <xsd:attribute name="name" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- SchemaDiffer: change descriptions. {n} = positional args -->
+  <data name="Diff_CreateTable" xml:space="preserve"><value>Create table "{0}" ({1} column(s), {2} index(es))</value></data>
+  <data name="Diff_AddColumn" xml:space="preserve"><value>Add column "{0}" {1}{2}</value></data>
+  <data name="Diff_AddColumn_Caution" xml:space="preserve"><value>Warning: column "{0}" is NOT NULL without a DEFAULT — will fail if the table has existing rows</value></data>
+  <data name="Diff_AlterType" xml:space="preserve"><value>Alter type "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterType_Caution" xml:space="preserve"><value>Warning: type narrowing "{0}": {1} → {2} — may cause data truncation</value></data>
+  <data name="Diff_AlterNullable" xml:space="preserve"><value>Alter nullable "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterDefault" xml:space="preserve"><value>Alter default "{0}": {1} → {2}</value></data>
+  <data name="Diff_None" xml:space="preserve"><value>(none)</value></data>
+  <data name="Diff_DropColumn" xml:space="preserve"><value>Drop column "{0}" (not in SQL definition)</value></data>
+  <data name="Diff_DropColumn_Caution" xml:space="preserve"><value>Warning: column "{0}" will be dropped — data will be permanently lost</value></data>
+  <data name="Diff_AddPK" xml:space="preserve"><value>Add primary key "{0}" ({1})</value></data>
+  <data name="Diff_AddPK_Caution" xml:space="preserve"><value>Warning: adding a primary key may affect foreign key relationships</value></data>
+  <data name="Diff_DropPK" xml:space="preserve"><value>Drop primary key "{0}"</value></data>
+  <data name="Diff_DropPK_Caution" xml:space="preserve"><value>Warning: dropping the primary key may affect foreign key relationships</value></data>
+  <data name="Diff_RecreatePK" xml:space="preserve"><value>Recreate primary key: ({0}) → ({1})</value></data>
+  <data name="Diff_RecreatePK_Caution" xml:space="preserve"><value>Warning: recreating the primary key may affect foreign key relationships</value></data>
+  <data name="Diff_CreateIndex" xml:space="preserve"><value>Create index "{0}"</value></data>
+  <data name="Diff_RecreateIndex" xml:space="preserve"><value>Recreate index "{0}" (definition changed)</value></data>
+  <data name="Diff_DropIndex" xml:space="preserve"><value>Drop index "{0}" (not in SQL definition)</value></data>
+
+  <!-- DeployExecutor: user-visible messages -->
+  <data name="Deploy_Cancelled" xml:space="preserve"><value>Deployment cancelled by user</value></data>
+  <data name="Deploy_ExtensionHint" xml:space="preserve"><value>Hint: This error is often caused by a missing PostgreSQL extension (e.g., postgis, uuid-ossp). Add the required extension in the Extensions list and redeploy.</value></data>
+  <data name="Deploy_Executing" xml:space="preserve"><value>[{0}] executing ({1}/{2})</value></data>
+
+  <!-- DeployOrchestrator: progress messages -->
+  <data name="Deploy_Progress" xml:space="preserve"><value>[{0}/{1}] Deploying {2}...</value></data>
+
+</root>

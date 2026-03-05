@@ -1,0 +1,6 @@
+CREATE TABLE "Test_InlinePk"
+(
+    "Code" VARCHAR(50) NOT NULL PRIMARY KEY,
+    "Name" VARCHAR(200) NOT NULL,
+    "Seq" SMALLINT NULL
+);

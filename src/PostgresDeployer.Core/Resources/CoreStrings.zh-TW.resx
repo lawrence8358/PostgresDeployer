@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace"/>
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string"/>
+              <xsd:attribute name="name" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- SchemaDiffer -->
+  <data name="Diff_CreateTable" xml:space="preserve"><value>建立新資料表 "{0}" ({1} 欄位, {2} 索引)</value></data>
+  <data name="Diff_AddColumn" xml:space="preserve"><value>新增欄位 "{0}" {1}{2}</value></data>
+  <data name="Diff_AddColumn_Caution" xml:space="preserve"><value>注意: 欄位 "{0}" 為 NOT NULL 但沒有 DEFAULT 值，若資料表已有資料將會失敗</value></data>
+  <data name="Diff_AlterType" xml:space="preserve"><value>變更型別 "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterType_Caution" xml:space="preserve"><value>注意: 欄位 "{0}" 型別縮窄 {1} → {2}，可能導致資料截斷</value></data>
+  <data name="Diff_AlterNullable" xml:space="preserve"><value>變更 Nullable "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterDefault" xml:space="preserve"><value>變更 Default "{0}": {1} → {2}</value></data>
+  <data name="Diff_None" xml:space="preserve"><value>(無)</value></data>
+  <data name="Diff_DropColumn" xml:space="preserve"><value>刪除欄位 "{0}"（不在 SQL 定義檔中）</value></data>
+  <data name="Diff_DropColumn_Caution" xml:space="preserve"><value>注意: 欄位 "{0}" 將被刪除，資料將永久遺失</value></data>
+  <data name="Diff_AddPK" xml:space="preserve"><value>新增主鍵 "{0}" ({1})</value></data>
+  <data name="Diff_AddPK_Caution" xml:space="preserve"><value>注意: 新增主鍵可能影響外鍵關聯</value></data>
+  <data name="Diff_DropPK" xml:space="preserve"><value>刪除主鍵 "{0}"</value></data>
+  <data name="Diff_DropPK_Caution" xml:space="preserve"><value>注意: 刪除主鍵可能影響外鍵關聯</value></data>
+  <data name="Diff_RecreatePK" xml:space="preserve"><value>重建主鍵: ({0}) → ({1})</value></data>
+  <data name="Diff_RecreatePK_Caution" xml:space="preserve"><value>注意: 重建主鍵可能影響外鍵關聯</value></data>
+  <data name="Diff_CreateIndex" xml:space="preserve"><value>建立索引 "{0}"</value></data>
+  <data name="Diff_RecreateIndex" xml:space="preserve"><value>重建索引 "{0}"（定義已變更）</value></data>
+  <data name="Diff_DropIndex" xml:space="preserve"><value>刪除索引 "{0}"（不在 SQL 定義檔中）</value></data>
+
+  <!-- DeployExecutor -->
+  <data name="Deploy_Cancelled" xml:space="preserve"><value>部署已被使用者取消</value></data>
+  <data name="Deploy_ExtensionHint" xml:space="preserve"><value>提示：該錯誤通常是 PostgreSQL Extension 未安裝造成（如 postgis、uuid-ossp 等）。請到「設定」頁籤的 Extensions 清單中新增所需 Extension 後再重新部署。</value></data>
+  <data name="Deploy_Executing" xml:space="preserve"><value>[{0}] 執行中 ({1}/{2})</value></data>
+
+  <!-- DeployOrchestrator -->
+  <data name="Deploy_Progress" xml:space="preserve"><value>[{0}/{1}] 正在部署 {2}...</value></data>
+
+</root>

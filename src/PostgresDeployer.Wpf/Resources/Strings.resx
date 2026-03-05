@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace"/>
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string"/>
+              <xsd:attribute name="name" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+              <xsd:attribute name="type" type="xsd:string"/>
+              <xsd:attribute name="mimetype" type="xsd:string"/>
+              <xsd:attribute ref="xml:space"/>
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1"/>
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string"/>
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- Navigation -->
+  <data name="Nav_Settings" xml:space="preserve"><value>⚙  Settings</value></data>
+  <data name="Nav_Deploy" xml:space="preserve"><value>🚀  Deploy</value></data>
+  <data name="Nav_Log" xml:space="preserve"><value>📋  Log</value></data>
+
+  <!-- App header -->
+  <data name="App_Subtitle" xml:space="preserve"><value>PostgreSQL Schema Deploy</value></data>
+  <data name="App_Version" xml:space="preserve"><value>PostgresDeployer Version {0}</value></data>
+
+  <!-- Language switcher -->
+  <data name="Lang_Language" xml:space="preserve"><value>Language</value></data>
+
+  <!-- Settings page -->
+  <data name="Settings_Title" xml:space="preserve"><value>Settings</value></data>
+  <data name="Settings_Connection" xml:space="preserve"><value>🔌  Connection Settings</value></data>
+  <data name="Settings_Host" xml:space="preserve"><value>Host</value></data>
+  <data name="Settings_Port" xml:space="preserve"><value>Port</value></data>
+  <data name="Settings_Database" xml:space="preserve"><value>Database Name</value></data>
+  <data name="Settings_Username" xml:space="preserve"><value>Username</value></data>
+  <data name="Settings_Password" xml:space="preserve"><value>Password</value></data>
+  <data name="Settings_TestConnection" xml:space="preserve"><value>Test Connection</value></data>
+  <data name="Settings_SqlPaths" xml:space="preserve"><value>📁  SQL File Paths</value></data>
+  <data name="Settings_Browse" xml:space="preserve"><value>Browse...</value></data>
+  <data name="Settings_SchemaFolder" xml:space="preserve"><value>Schema Folder</value></data>
+  <data name="Settings_InitDataFolder" xml:space="preserve"><value>Init Data Folder</value></data>
+  <data name="Settings_ExtPlaceholder" xml:space="preserve"><value>Enter extension name...</value></data>
+  <data name="Settings_ExtAdd" xml:space="preserve"><value>+ Add</value></data>
+  <data name="Settings_ExtTooltipLine1" xml:space="preserve"><value>Specifies PostgreSQL extensions to auto-install before deployment.</value></data>
+  <data name="Settings_ExtTooltipLine2" xml:space="preserve"><value>Each extension is installed</value></data>
+  <data name="Settings_ExtTooltipBefore" xml:space="preserve"><value>before</value></data>
+  <data name="Settings_ExtTooltipLine3" xml:space="preserve"><value>all schema objects are deployed:</value></data>
+  <data name="Settings_ExtTooltipLine4" xml:space="preserve"><value>Ensures subsequent SQL can use types, functions, and operators provided by the extension.</value></data>
+  <data name="Settings_ExtTooltipExamples" xml:space="preserve"><value>Common examples:</value></data>
+  <data name="Settings_ExtTooltipPgcrypto" xml:space="preserve"><value>— encryption functions (gen_random_uuid, crypt)</value></data>
+  <data name="Settings_ExtTooltipPostgis" xml:space="preserve"><value>— geospatial types and functions</value></data>
+  <data name="Settings_ExtTooltipUuidOssp" xml:space="preserve"><value>— UUID generation functions</value></data>
+  <data name="Settings_ExtTooltipPgTrgm" xml:space="preserve"><value>— string similarity search</value></data>
+  <data name="Settings_DeployOptions" xml:space="preserve"><value>⚡  Deploy Options</value></data>
+  <data name="Settings_SeedData" xml:space="preserve"><value>Run init data scripts (Seed Data)</value></data>
+  <data name="Settings_StopOnError" xml:space="preserve"><value>Stop on error</value></data>
+  <data name="Settings_Load" xml:space="preserve"><value>📂  Load Settings</value></data>
+  <data name="Settings_Save" xml:space="preserve"><value>💾  Save</value></data>
+  <data name="Settings_SaveAs" xml:space="preserve"><value>📄  Save As</value></data>
+  <data name="Settings_RecentFiles" xml:space="preserve"><value>🕐  Recent Files</value></data>
+
+  <!-- Deploy page -->
+  <data name="Deploy_Title" xml:space="preserve"><value>Deploy</value></data>
+  <data name="Deploy_Analyze" xml:space="preserve"><value>🔍  Analyze Differences</value></data>
+  <data name="Deploy_Execute" xml:space="preserve"><value>🚀  Execute Deploy</value></data>
+  <data name="Deploy_Cancel" xml:space="preserve"><value>✕  Cancel</value></data>
+  <data name="Deploy_ChangeList" xml:space="preserve"><value>📝  Change List</value></data>
+  <data name="Deploy_SqlPreview" xml:space="preserve"><value>🗒  SQL Preview</value></data>
+
+  <!-- Log page -->
+  <data name="Log_Title" xml:space="preserve"><value>Log</value></data>
+  <data name="Log_Filter" xml:space="preserve"><value>Filter:</value></data>
+  <data name="Log_FilterAll" xml:space="preserve"><value>All</value></data>
+  <data name="Log_Clear" xml:space="preserve"><value>🗑  Clear</value></data>
+  <data name="Log_Copy" xml:space="preserve"><value>📋  Copy</value></data>
+  <data name="Log_Export" xml:space="preserve"><value>📤  Export</value></data>
+  <data name="Log_ColTime" xml:space="preserve"><value>Time</value></data>
+  <data name="Log_ColLevel" xml:space="preserve"><value>Level</value></data>
+  <data name="Log_ColMessage" xml:space="preserve"><value>Message</value></data>
+
+  <!-- Status messages -->
+  <data name="Status_Ready" xml:space="preserve"><value>Ready</value></data>
+  <data name="Status_Analyzing" xml:space="preserve"><value>Analyzing schema differences...</value></data>
+  <data name="Status_AnalyzeComplete" xml:space="preserve"><value>Analysis complete: {0} statements, {1} cautions</value></data>
+  <data name="Status_AnalyzeFailed" xml:space="preserve"><value>Analysis failed: {0}</value></data>
+  <data name="Status_DeployAllOk" xml:space="preserve"><value>Deploy complete! {0} groups all succeeded.</value></data>
+  <data name="Status_DeployPartial" xml:space="preserve"><value>Deploy complete: {0} succeeded, {1} failed.</value></data>
+  <data name="Status_Canceled" xml:space="preserve"><value>Deploy canceled.</value></data>
+  <data name="Status_DeployFailed" xml:space="preserve"><value>Deploy failed: {0}</value></data>
+  <data name="Status_Canceling" xml:space="preserve"><value>Canceling deploy...</value></data>
+  <data name="Status_TestingConn" xml:space="preserve"><value>Testing connection...</value></data>
+  <data name="Status_ConnSuccess" xml:space="preserve"><value>✓ Connection successful</value></data>
+  <data name="Status_ConnFailed" xml:space="preserve"><value>✗ Connection failed</value></data>
+  <data name="Status_ConnFailedWith" xml:space="preserve"><value>✗ Connection failed: {0}</value></data>
+
+  <!-- Change groups -->
+  <data name="Group_NewTables" xml:space="preserve"><value>New Tables</value></data>
+  <data name="Group_TableChanges" xml:space="preserve"><value>Table Changes</value></data>
+  <data name="Group_Indexes" xml:space="preserve"><value>Indexes</value></data>
+  <data name="Group_Cautions" xml:space="preserve"><value>Cautions</value></data>
+  <data name="Group_Statement" xml:space="preserve"><value>Statement {0}</value></data>
+
+  <!-- Dialog titles and messages -->
+  <data name="Dialog_ConfirmDeploy" xml:space="preserve"><value>Are you sure you want to deploy? This operation will modify the database schema.</value></data>
+  <data name="Dialog_ConfirmDeployTitle" xml:space="preserve"><value>Confirm Deploy</value></data>
+  <data name="Dialog_DeployResult" xml:space="preserve"><value>Deploy Result</value></data>
+  <data name="Dialog_LoadSettings" xml:space="preserve"><value>Load Settings</value></data>
+  <data name="Dialog_SaveSettings" xml:space="preserve"><value>Save Settings As</value></data>
+  <data name="Dialog_SelectSchemaFolder" xml:space="preserve"><value>Select Schema Folder</value></data>
+  <data name="Dialog_SelectInitDataFolder" xml:space="preserve"><value>Select Init Data Folder</value></data>
+  <data name="Dialog_ExportLog" xml:space="preserve"><value>Export Log</value></data>
+  <data name="Dialog_JsonFilter" xml:space="preserve"><value>JSON Files|*.json|All Files|*.*</value></data>
+  <data name="Dialog_JsonFilterSave" xml:space="preserve"><value>JSON Files|*.json</value></data>
+  <data name="Dialog_TxtFilter" xml:space="preserve"><value>Text Files|*.txt|All Files|*.*</value></data>
+
+  <!-- Common / Errors -->
+  <data name="Common_Error" xml:space="preserve"><value>Error</value></data>
+  <data name="Error_LoadSettings" xml:space="preserve"><value>Failed to load settings: {0}</value></data>
+  <data name="Error_SaveSettings" xml:space="preserve"><value>Failed to save settings: {0}</value></data>
+  <data name="Error_FileNotFound" xml:space="preserve"><value>File not found: {0}</value></data>
+  <data name="Error_ExportLog" xml:space="preserve"><value>Failed to export log: {0}</value></data>
+</root>

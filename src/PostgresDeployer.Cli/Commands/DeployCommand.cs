@@ -11,7 +11,7 @@ public static class DeployCommand
         string? config, string? host, int? port, string? database,
         string? username, string? password,
         bool dryRun, bool yes, string only, bool stopOnError,
-        string? basePath, string? schema, string? initData,
+        string? schema, string? initData,
         string? extensions, string? logFile)
     {
         try
@@ -19,7 +19,7 @@ public static class DeployCommand
             return await HandleCoreAsync(
                 config, host, port, database, username, password,
                 dryRun, yes, only, stopOnError,
-                basePath, schema, initData,
+                schema, initData,
                 extensions, logFile);
         }
         catch (Exception ex)
@@ -33,13 +33,13 @@ public static class DeployCommand
         string? config, string? host, int? port, string? database,
         string? username, string? password,
         bool dryRun, bool yes, string only, bool stopOnError,
-        string? basePath, string? schema, string? initData,
+        string? schema, string? initData,
         string? extensions, string? logFile)
     {
         // 1. 合併設定
         var settings = SettingsMerger.Merge(
             config, host, port, database, username, password,
-            basePath, schema, initData, extensions);
+            schema, initData, extensions);
 
         settings.Options.StopOnError = stopOnError;
 
@@ -89,7 +89,7 @@ public static class DeployCommand
             // 5. 顯示連線資訊
             Console.WriteLine($"Target:   {settings.Connection.Host}:{settings.Connection.Port}/{settings.Connection.Database}");
             Console.WriteLine($"Username: {settings.Connection.Username}");
-            Console.WriteLine($"SQL path: {settings.Paths.BasePath}");
+            Console.WriteLine($"Schema:   {settings.Paths.Schema}");
             Console.WriteLine();
 
             // 6. 測試連線

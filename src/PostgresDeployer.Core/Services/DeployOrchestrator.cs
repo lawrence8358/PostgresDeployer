@@ -44,7 +44,7 @@ public class DeployOrchestrator : IDeployOrchestrator
             plan.Groups.Add(extGroup);
 
         // Schema 資料夾：讀取所有 *.sql（遞迴），依 SQL 內容自動分類
-        var schemaFiles = parser.ReadSqlFiles(paths.GetFullPath(paths.Schema));
+        var schemaFiles = parser.ReadSqlFiles(paths.Schema);
         _logger.LogInformation("Found {Count} SQL file(s) in schema directory", schemaFiles.Count);
 
         var sequenceFiles  = new List<(string FileName, string Content)>();
@@ -346,7 +346,7 @@ public class DeployOrchestrator : IDeployOrchestrator
         // Init Data
         if (settings.Options.ExecuteSeedData)
         {
-            var seedFiles = parser.ReadSqlFiles(paths.GetFullPath(paths.InitData));
+            var seedFiles = parser.ReadSqlFiles(paths.InitData);
             if (seedFiles.Count > 0)
             {
                 var seedGroup = new DeployGroup { Name = "Init Data" };

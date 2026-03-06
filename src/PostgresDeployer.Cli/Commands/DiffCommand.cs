@@ -10,7 +10,7 @@ public static class DiffCommand
     public static async Task<int> HandleAsync(
         string? config, string? host, int? port, string? database,
         string? username, string? password,
-        string? basePath, string? schema, string? initData,
+        string? schema, string? initData,
         string? extensions, string? output)
     {
         try
@@ -18,7 +18,7 @@ public static class DiffCommand
             // 1. 合併設定
             var settings = SettingsMerger.Merge(
                 config, host, port, database, username, password,
-                basePath, schema, initData, extensions);
+                schema, initData, extensions);
 
             // 2. 驗證必要參數
             if (string.IsNullOrEmpty(settings.Connection.Database))

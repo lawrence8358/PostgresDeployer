@@ -171,9 +171,8 @@ pgdeploy deploy --config PostgresDeployer.json --log-file deploy.log
 | `--only` | 只部署 `tables`、`views`、`seeds` 或 `all`（預設：`all`）|
 | `--log-file` | 將部署日誌寫入指定檔案 |
 | `--stop-on-error` | 任一群組執行失敗時停止部署（預設：true）|
-| `--base-path` | SQL 檔案根目錄 |
-| `--schema` | Schema DDL 子目錄（包含 Tables/、Views/、Functions/ 等） |
-| `--init-data` | 種子資料子目錄 |
+| `--schema` | Schema DDL 目錄路徑（包含 Tables/、Views/、Functions/ 等） |
+| `--init-data` | 種子資料目錄路徑 |
 | `--extensions` | 要確保安裝的 PostgreSQL Extension（逗號分隔）|
 
 **部署紀錄（RunScript）**
@@ -206,9 +205,8 @@ RunScripts/
     "password": ""
   },
   "paths": {
-    "basePath": ".",
-    "schema": "Schema",
-    "initData": "InitData"
+    "schema": "C:/Projects/MyApp/Schema",
+    "initData": "C:/Projects/MyApp/InitData"
   },
   "extensions": ["pgcrypto"],
   "options": {
@@ -217,6 +215,8 @@ RunScripts/
   }
 }
 ```
+
+> **備註**：`schema` 與 `initData` 必須為絕對路徑（例如 `C:\Projects\MyApp\Schema`），不支援相對路徑。
 
 **參數優先順序**：CLI 參數 > 設定檔 > 預設值
 
@@ -259,10 +259,9 @@ pgdeploy deploy \
   --database "$DB_NAME" \
   --username "$DB_USER" \
   --password "$DB_PASSWORD" \
-  --base-path ./Schema \
-  --schema Schema \
-  --init-data InitData \
-  --extensions "pgcrypto" \
+  --schema "C:\SqlScripts\Schema" \
+  --init-data "C:\SqlScripts\InitData" \
+  --extensions "pgcrypto,uuid-ossp" \
   --stop-on-error \
   --yes
 ```

@@ -12,7 +12,7 @@ public static class TestConnectionCommand
         // 1. 合併設定
         var settings = SettingsMerger.Merge(
             config, host, port, database, username, password,
-            null, null, null, null);
+            null, null, null);
 
         // 2. 驗證必要參數
         if (string.IsNullOrEmpty(settings.Connection.Database))

@@ -10,9 +10,8 @@ var usernameOption = new Option<string?>("--username", "-u") { Description = "Us
 var passwordOption = new Option<string?>("--password", "-p") { Description = "Password" };
 
 // ═══ Path options ═══
-var basePathOption = new Option<string?>("--base-path") { Description = "SQL files root directory" };
-var schemaOption = new Option<string?>("--schema") { Description = "Schema DDL subdirectory (Table/View/Function/Sequence/Procedure)" };
-var initDataOption = new Option<string?>("--init-data") { Description = "Init data subdirectory (INSERT / Seed Data)" };
+var schemaOption = new Option<string?>("--schema") { Description = "Schema DDL directory path (Tables/Views/Functions/Sequences/Procedures)" };
+var initDataOption = new Option<string?>("--init-data") { Description = "Seed data directory path (INSERT / Seed Data)" };
 var extensionsOption = new Option<string?>("--extensions") { Description = "PostgreSQL extensions (comma-separated)" };
 
 // ═══ deploy command ═══
@@ -23,7 +22,6 @@ deployCommand.Add(portOption);
 deployCommand.Add(databaseOption);
 deployCommand.Add(usernameOption);
 deployCommand.Add(passwordOption);
-deployCommand.Add(basePathOption);
 deployCommand.Add(schemaOption);
 deployCommand.Add(initDataOption);
 deployCommand.Add(extensionsOption);
@@ -53,7 +51,6 @@ deployCommand.SetAction(async parseResult =>
         parseResult.GetValue(yesOption),
         parseResult.GetValue(onlyOption)!,
         parseResult.GetValue(stopOnErrorOption),
-        parseResult.GetValue(basePathOption),
         parseResult.GetValue(schemaOption),
         parseResult.GetValue(initDataOption),
         parseResult.GetValue(extensionsOption),
@@ -68,7 +65,6 @@ diffCommand.Add(portOption);
 diffCommand.Add(databaseOption);
 diffCommand.Add(usernameOption);
 diffCommand.Add(passwordOption);
-diffCommand.Add(basePathOption);
 diffCommand.Add(schemaOption);
 diffCommand.Add(initDataOption);
 diffCommand.Add(extensionsOption);
@@ -85,7 +81,6 @@ diffCommand.SetAction(async parseResult =>
         parseResult.GetValue(databaseOption),
         parseResult.GetValue(usernameOption),
         parseResult.GetValue(passwordOption),
-        parseResult.GetValue(basePathOption),
         parseResult.GetValue(schemaOption),
         parseResult.GetValue(initDataOption),
         parseResult.GetValue(extensionsOption),

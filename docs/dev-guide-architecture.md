@@ -141,19 +141,21 @@ public class DeployPlan
 
 ## PathSettings 路徑結構
 
+`schema` 與 `initData` 均為使用者提供的**絕對路徑**，由 CLI 參數（`--schema` / `--init-data`）、config 檔或 WPF 資料夾選擇器指定。不支援相對路徑。
+
 ```
-{basePath}/
-├── {schema}/               # 預設 "Schema"
-│   ├── Tables/             # *.sql → 資料表定義
-│   ├── Views/              # *.sql → View 定義
-│   ├── Functions/          # *.sql → Function 定義
-│   ├── Procedures/         # *.sql → Stored Procedure 定義
-│   └── Sequences/          # *.sql → Sequence 定義
-└── {initData}/             # 預設 "InitData"
-    └── *.sql               # MERGE 陳述式（種子資料）
+{schema}/               # 絕對路徑，例如 C:\Test\Script\Schema
+├── Tables/             # *.sql → 資料表定義
+├── Views/              # *.sql → View 定義
+├── Functions/          # *.sql → Function 定義
+├── Procedures/         # *.sql → Stored Procedure 定義
+└── Sequences/          # *.sql → Sequence 定義
+
+{initData}/             # 絕對路徑，例如 C:\Test\Script\InitData
+└── *.sql               # MERGE 陳述式（種子資料）
 ```
 
-子目錄名稱（Tables/Views/Functions/等）由 `SqlSchemaDetector` 根據資料夾名稱自動識別檔案類型。
+檔案類型由 `SqlSchemaDetector` 根據 SQL 檔案內容（`CREATE TABLE`、`CREATE VIEW` 等關鍵字）自動識別，與資料夾名稱無關。子目錄結構僅為組織慣例。
 
 ## CLI 專案結構
 

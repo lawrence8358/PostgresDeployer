@@ -171,9 +171,8 @@ All commands accept connection parameters that override the config file:
 | `--only` | Deploy only `tables`, `views`, `seeds`, or `all` (default: `all`) |
 | `--log-file` | Write deployment log to file |
 | `--stop-on-error` | Stop deployment if any group fails (default: true) |
-| `--base-path` | SQL files root directory |
-| `--schema` | Schema DDL subdirectory (contains Tables/, Views/, Functions/, etc.) |
-| `--init-data` | Seed data subdirectory |
+| `--schema` | Schema DDL directory path (contains Tables/, Views/, Functions/, etc.) |
+| `--init-data` | Seed data directory path |
 | `--extensions` | PostgreSQL extensions to ensure (comma-separated) |
 
 **Run Script Output**
@@ -206,9 +205,8 @@ Generate a config file with `pgdeploy init`, then edit to match your environment
     "password": ""
   },
   "paths": {
-    "basePath": ".",
-    "schema": "Schema",
-    "initData": "InitData"
+    "schema": "C:/Projects/MyApp/Schema",
+    "initData": "C:/Projects/MyApp/InitData"
   },
   "extensions": ["pgcrypto"],
   "options": {
@@ -217,6 +215,8 @@ Generate a config file with `pgdeploy init`, then edit to match your environment
   }
 }
 ```
+
+> **Note**: `schema` and `initData` must be absolute paths (e.g. `C:\Projects\MyApp\Schema`). Relative paths are not supported.
 
 **Parameter priority**: CLI arguments > config file > defaults
 
@@ -259,10 +259,9 @@ pgdeploy deploy \
   --database "$DB_NAME" \
   --username "$DB_USER" \
   --password "$DB_PASSWORD" \
-  --base-path ./Schema \
-  --schema Schema \
-  --init-data InitData \
-  --extensions "pgcrypto" \
+  --schema "C:\SqlScripts\Schema" \
+  --init-data "C:\SqlScripts\InitData" \
+  --extensions "pgcrypto,uuid-ossp" \
   --stop-on-error \
   --yes
 ```

@@ -13,7 +13,7 @@ public static class SettingsMerger
         string? configPath,
         string? cliHost, int? cliPort, string? cliDatabase,
         string? cliUsername, string? cliPassword,
-        string? cliBasePath, string? cliSchema, string? cliInitData,
+        string? cliSchema, string? cliInitData,
         string? cliExtensions)
     {
         // 1. 基底設定：從設定檔載入或使用預設值
@@ -21,22 +21,13 @@ public static class SettingsMerger
             ? DeploySettings.LoadFromFile(configPath)
             : new DeploySettings();
 
-        // 2. 若設定檔有 BasePath 且為相對路徑，以設定檔所在目錄為基準解析
-        if (!string.IsNullOrEmpty(configPath) && !Path.IsPathRooted(settings.Paths.BasePath))
-        {
-            var configDir = Path.GetDirectoryName(Path.GetFullPath(configPath))!;
-            settings.Paths.BasePath = Path.GetFullPath(
-                Path.Combine(configDir, settings.Paths.BasePath));
-        }
-
-        // 3. CLI 參數覆蓋（僅覆蓋非 null 的值）
+        // 2. CLI 參數覆蓋（僅覆蓋非 null 的值）
         if (cliHost != null) settings.Connection.Host = cliHost;
         if (cliPort != null) settings.Connection.Port = cliPort.Value;
         if (cliDatabase != null) settings.Connection.Database = cliDatabase;
         if (cliUsername != null) settings.Connection.Username = cliUsername;
         if (cliPassword != null) settings.Connection.Password = cliPassword;
 
-        if (cliBasePath != null) settings.Paths.BasePath = Path.GetFullPath(cliBasePath);
         if (cliSchema != null) settings.Paths.Schema = cliSchema;
         if (cliInitData != null) settings.Paths.InitData = cliInitData;
 

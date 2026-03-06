@@ -93,8 +93,7 @@ public partial class SettingsViewModel : ObservableObject
 
         try
         {
-            var settings = DeploySettings.LoadFromFile(path);
-            FromSettings(settings);
+            FromSettings(DeploySettings.LoadFromFile(path));
             _currentConfigPath = path;
             _appSettings.AddRecentFile(path);
             RefreshRecentFiles();
@@ -198,8 +197,7 @@ public partial class SettingsViewModel : ObservableObject
 
         try
         {
-            var settings = DeploySettings.LoadFromFile(recent.Path);
-            FromSettings(settings);
+            FromSettings(DeploySettings.LoadFromFile(recent.Path));
             _currentConfigPath = recent.Path;
             _appSettings.AddRecentFile(recent.Path);
             RefreshRecentFiles();
@@ -264,8 +262,8 @@ public partial class SettingsViewModel : ObservableObject
         // 從 Windows 認證管理員讀取密碼
         var key = WindowsCredentialManager.CredentialKey(Host, Port, Database, Username);
         Password = WindowsCredentialManager.Load(key);
-        SchemaPath = settings.Paths.GetFullPath(settings.Paths.Schema);
-        InitDataPath = settings.Paths.GetFullPath(settings.Paths.InitData);
+        SchemaPath = settings.Paths.Schema;
+        InitDataPath = settings.Paths.InitData;
         Extensions = new ObservableCollection<string>(settings.Extensions);
         ExecuteSeedData = settings.Options.ExecuteSeedData;
         StopOnError = settings.Options.StopOnError;

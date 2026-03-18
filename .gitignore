@@ -330,8 +330,7 @@ ASALocalRun/
 .mfractor/
 
 *.refactorlog
-*.trc  
-TempTools/
+*.trc
 
 # 排除各 AI Agent 設定檔案
 .agent

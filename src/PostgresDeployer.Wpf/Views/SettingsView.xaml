@@ -274,7 +274,10 @@
                                   IsChecked="{Binding ExecuteSeedData}"
                                   Margin="0,0,0,8"/>
                         <CheckBox Content="{l:Loc Settings_StopOnError}"
-                                  IsChecked="{Binding StopOnError}"/>
+                                  IsChecked="{Binding StopOnError}"
+                                  Margin="0,0,0,8"/>
+                        <CheckBox Content="{l:Loc Settings_CreateDbIfNotExists}"
+                                  IsChecked="{Binding CreateDatabaseIfNotExists}"/>
                     </StackPanel>
                 </StackPanel>
             </hc:Card>

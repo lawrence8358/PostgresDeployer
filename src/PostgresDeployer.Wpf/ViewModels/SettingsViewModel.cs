@@ -33,6 +33,7 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private bool executeSeedData = true;
     [ObservableProperty] private bool stopOnError = true;
+    [ObservableProperty] private bool createDatabaseIfNotExists = false;
 
     // ═══ 狀態 ═══
     [ObservableProperty] private string connectionStatus = "";
@@ -62,14 +63,28 @@ public partial class SettingsViewModel : ObservableObject
                 Username = Username,
                 Password = Password
             };
-            var introspector = new SchemaIntrospector(connSettings.ToConnectionString());
-            if (await introspector.TestConnectionAsync())
+
+            if (CreateDatabaseIfNotExists)
             {
-                ConnectionStatus = LocalizationService.Instance["Status_ConnSuccess"];
+                // 測試伺服器連線（不指定資料庫），再檢查資料庫是否存在
+                var serverIntrospector = new SchemaIntrospector(connSettings.ToServerConnectionString());
+                if (!await serverIntrospector.TestConnectionAsync())
+                {
+                    ConnectionStatus = LocalizationService.Instance["Status_ConnFailed"];
+                    return;
+                }
+                var dbExists = await Core.Services.DatabaseInitializer.DatabaseExistsAsync(
+                    connSettings.ToServerConnectionString(), connSettings.Database);
+                ConnectionStatus = dbExists
+                    ? LocalizationService.Instance["Status_ConnSuccess"]
+                    : LocalizationService.Instance["Status_ConnSuccessDbWillCreate"];
             }
             else
             {
-                ConnectionStatus = LocalizationService.Instance["Status_ConnFailed"];
+                var introspector = new SchemaIntrospector(connSettings.ToConnectionString());
+                ConnectionStatus = await introspector.TestConnectionAsync()
+                    ? LocalizationService.Instance["Status_ConnSuccess"]
+                    : LocalizationService.Instance["Status_ConnFailed"];
             }
         }
         catch (Exception ex)
@@ -237,7 +252,8 @@ public partial class SettingsViewModel : ObservableObject
             Options = new DeployOptions
             {
                 ExecuteSeedData = ExecuteSeedData,
-                StopOnError = StopOnError
+                StopOnError = StopOnError,
+                CreateDatabaseIfNotExists = CreateDatabaseIfNotExists
             }
         };
     }
@@ -267,5 +283,6 @@ public partial class SettingsViewModel : ObservableObject
         Extensions = new ObservableCollection<string>(settings.Extensions);
         ExecuteSeedData = settings.Options.ExecuteSeedData;
         StopOnError = settings.Options.StopOnError;
+        CreateDatabaseIfNotExists = settings.Options.CreateDatabaseIfNotExists;
     }
 }

@@ -48,6 +48,8 @@ PostgresDeployer 採用**期望狀態（Desired State）**方式：
 - CLI 工具，適用於腳本化與 CI/CD 部署
 - WPF 桌面應用程式，適用於互動式操作
 - 執行時語系切換（English / 繁體中文）
+- 連線字串支援，簡化 CI/CD 設定（`--connection-string`）
+- 資料庫不存在時自動建立（`--create-db-if-not-exists`）
 
 ## 功能展示
 
@@ -161,6 +163,8 @@ pgdeploy deploy --config PostgresDeployer.json --log-file deploy.log
 | `--database` | `-d` | 資料庫名稱 |
 | `--username` | `-u` | 使用者名稱 |
 | `--password` | `-p` | 密碼 |
+| `--connection-string` | `-s` | 完整連線字串（覆蓋所有個別連線選項） |
+| `--create-db-if-not-exists` | | 若目標資料庫不存在則自動建立 |
 
 **`deploy` 專用選項**
 
@@ -211,20 +215,61 @@ RunScripts/
   "extensions": ["pgcrypto"],
   "options": {
     "executeSeedData": true,
-    "stopOnError": true
+    "stopOnError": true,
+    "createDatabaseIfNotExists": false
+  }
+}
+```
+
+也可以改用連線字串取代個別欄位：
+
+```json
+{
+  "connection": {
+    "connectionString": "Host=localhost;Port=5432;Database=MyDatabase;Username=postgres;Password=secret"
+  },
+  "paths": {
+    "schema": "C:/Projects/MyApp/Schema",
+    "initData": "C:/Projects/MyApp/InitData"
+  },
+  "extensions": ["pgcrypto"],
+  "options": {
+    "executeSeedData": true,
+    "stopOnError": true,
+    "createDatabaseIfNotExists": false
   }
 }
 ```
 
 > **備註**：`schema` 與 `initData` 必須為絕對路徑（例如 `C:\Projects\MyApp\Schema`），不支援相對路徑。
 
-**參數優先順序**：CLI 參數 > 設定檔 > 預設值
+**參數優先順序**：CLI `--connection-string` > CLI 個別連線參數 > 設定檔 `connectionString` > 設定檔個別欄位 > 預設值
+
+### 自動建立資料庫
+
+當啟用 `--create-db-if-not-exists`（或設定檔 `"createDatabaseIfNotExists": true`）時，PostgresDeployer 會：
+
+- **`deploy` / `diff`**：先連線至 PostgreSQL 伺服器，若目標資料庫不存在則自動建立後再繼續。空資料庫代表所有 Schema 物件都將被視為新增。
+- **`test-connection`**：改為測試伺服器連線（不指定目標資料庫），若伺服器可連線，則回報目標資料庫是否已存在、或將於下次部署時建立。
+
+> **注意**：PostgreSQL 使用者需具備 `CREATEDB` 權限，自動建立資料庫才能成功。
 
 ### CI/CD 自動化部署
 
 在自動化流程中，將資料庫密碼存放在提交至版本庫的設定檔裡會有資安風險。建議設定檔只保留非敏感設定，連線憑證在執行時由平台 Secret 機制注入。
 
-**GitHub Actions 範例：**
+**GitHub Actions — 使用 `--connection-string`：**
+
+```yaml
+- name: Deploy database schema
+  run: |
+    pgdeploy deploy \
+      --config PostgresDeployer.json \
+      --connection-string "Host=${{ secrets.DB_HOST }};Database=${{ secrets.DB_NAME }};Username=${{ secrets.DB_USER }};Password=${{ secrets.DB_PASSWORD }}" \
+      --yes
+```
+
+**GitHub Actions — 使用個別選項：**
 
 ```yaml
 - name: Deploy database schema
@@ -235,6 +280,19 @@ RunScripts/
       --database ${{ secrets.DB_NAME }} \
       --username ${{ secrets.DB_USER }} \
       --password ${{ secrets.DB_PASSWORD }} \
+      --yes
+```
+
+**首次部署自動建立資料庫：**
+
+```yaml
+- name: Deploy database schema
+  run: |
+    pgdeploy deploy \
+      --connection-string "${{ secrets.DB_CONNECTION_STRING }}" \
+      --schema "C:\SqlScripts\Schema" \
+      --init-data "C:\SqlScripts\InitData" \
+      --create-db-if-not-exists \
       --yes
 ```
 
@@ -254,14 +312,11 @@ pgdeploy deploy \
 
 ```bash
 pgdeploy deploy \
-  --host "$DB_HOST" \
-  --port 5432 \
-  --database "$DB_NAME" \
-  --username "$DB_USER" \
-  --password "$DB_PASSWORD" \
+  --connection-string "Host=$DB_HOST;Port=5432;Database=$DB_NAME;Username=$DB_USER;Password=$DB_PASSWORD" \
   --schema "C:\SqlScripts\Schema" \
   --init-data "C:\SqlScripts\InitData" \
   --extensions "pgcrypto,uuid-ossp" \
+  --create-db-if-not-exists \
   --stop-on-error \
   --yes
 ```
@@ -275,6 +330,11 @@ WPF 應用程式提供互動式的 Schema 部署與管理介面，與指令列�
 1. **設定** — 載入或建立設定檔、視覺化編輯連線與路徑、進行快速連線測試
 2. **部署** — 分析 Schema 差異、以明確的警告與顏色標示檢視變更清單，最後一鍵執行
 3. **日誌** — 顯示包含詳細流程與警示的即時部署日誌
+
+設定頁的**部署選項**區塊包含：
+- **執行初始資料腳本** — 是否於部署時執行 Seed Data
+- **發生錯誤時停止** — 任一群組失敗時是否停止後續部署
+- **資料庫不存在時自動建立** — 啟用後，部署與比對前會自動確認資料庫存在；測試連線時改為測試伺服器連線，並回報目標資料庫是否需要建立
 
 可從左邊欄位設定鈕在執行時切換語系（English / 繁體中文）。所有編輯後的設定也可以存成 json 設定檔供日後或 CI/CD 使用。
 

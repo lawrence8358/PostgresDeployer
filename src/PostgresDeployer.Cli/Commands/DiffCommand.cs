@@ -7,23 +7,17 @@ using PostgresDeployer.Core.Services;
 
 public static class DiffCommand
 {
-    public static async Task<int> HandleAsync(
-        string? config, string? host, int? port, string? database,
-        string? username, string? password,
-        string? schema, string? initData,
-        string? extensions, string? output)
+    public static async Task<int> HandleAsync(CliArgs args, string? output)
     {
         try
         {
             // 1. 合併設定
-            var settings = SettingsMerger.Merge(
-                config, host, port, database, username, password,
-                schema, initData, extensions);
+            var settings = SettingsMerger.Merge(args);
 
             // 2. 驗證必要參數
             if (string.IsNullOrEmpty(settings.Connection.Database))
             {
-                Console.Error.WriteLine("Error: database name is required (--database or config file)");
+                await Console.Error.WriteLineAsync("Error: database name is required (--database, --connection-string, or config file)");
                 return 1;
             }
 
@@ -36,29 +30,42 @@ public static class DiffCommand
 
             var logger = loggerFactory.CreateLogger<DeployOrchestrator>();
 
-            // 4. 測試連線
-            var introspector = new SchemaIntrospector(settings.Connection.ToConnectionString());
-            if (!await introspector.TestConnectionAsync())
+            // 4. 測試連線（CreateDatabaseIfNotExists=true 時，DB 不存在為合法狀態，
+            //    Orchestrator 會自動視為空資料庫；僅需測試伺服器可達即可）
+            if (settings.Options.CreateDatabaseIfNotExists)
             {
-                Console.Error.WriteLine("Error: cannot connect to database");
-                return 1;
+                var serverIntrospector = new SchemaIntrospector(settings.Connection.ToServerConnectionString());
+                if (!await serverIntrospector.TestConnectionAsync())
+                {
+                    await Console.Error.WriteLineAsync("Error: cannot reach PostgreSQL server");
+                    return 1;
+                }
+            }
+            else
+            {
+                var introspector = new SchemaIntrospector(settings.Connection.ToConnectionString());
+                if (!await introspector.TestConnectionAsync())
+                {
+                    await Console.Error.WriteLineAsync("Error: cannot connect to database");
+                    return 1;
+                }
             }
 
-            // 5. 分析差異
+            // 6. 分析差異
             var orchestrator = new DeployOrchestrator(logger, loggerFactory);
             var plan = await orchestrator.AnalyzeAsync(settings);
 
-            // 6. 產生報告
+            // 7. 產生報告
             var report = GenerateReport(plan);
 
-            // 7. 輸出
+            // 8. 輸出
             if (!string.IsNullOrEmpty(output))
             {
                 var directory = Path.GetDirectoryName(output);
                 if (!string.IsNullOrEmpty(directory))
                     Directory.CreateDirectory(directory);
                 await File.WriteAllTextAsync(output, report);
-                Console.WriteLine($"Diff report written to: {output}");
+                await Console.Out.WriteLineAsync($"Diff report written to: {output}");
             }
             else
             {
@@ -69,7 +76,7 @@ public static class DiffCommand
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Error: {ex.Message}");
             return 1;
         }
     }
@@ -93,9 +100,7 @@ public static class DiffCommand
                 {
                     lines.Add($"  - {change.Description}");
                     if (change.Sql != null)
-                    {
                         lines.Add($"    SQL: {change.Sql}");
-                    }
                 }
                 lines.Add("");
             }
@@ -110,9 +115,7 @@ public static class DiffCommand
         {
             lines.Add("[Cautions]");
             foreach (var caution in plan.Cautions)
-            {
                 lines.Add($"  [!] {caution.CautionMessage}");
-            }
             lines.Add("");
         }
 

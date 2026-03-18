@@ -1,0 +1,15 @@
+{
+  "connection": {
+    "connectionString": "Host=cshost;Port=5433;Database=csdb;Username=csuser;Password=cspass"
+  },
+  "paths": {
+    "schema": "C:/TestProject/Schema",
+    "initData": "C:/TestProject/InitData"
+  },
+  "extensions": ["pgcrypto"],
+  "options": {
+    "executeSeedData": true,
+    "stopOnError": true,
+    "createDatabaseIfNotExists": true
+  }
+}

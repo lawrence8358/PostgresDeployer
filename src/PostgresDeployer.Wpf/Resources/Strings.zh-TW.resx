@@ -99,6 +99,7 @@
   <data name="Settings_DeployOptions" xml:space="preserve"><value>⚡  部署選項</value></data>
   <data name="Settings_SeedData" xml:space="preserve"><value>執行初始資料腳本（Seed Data）</value></data>
   <data name="Settings_StopOnError" xml:space="preserve"><value>發生錯誤時停止</value></data>
+  <data name="Settings_CreateDbIfNotExists" xml:space="preserve"><value>資料庫不存在時自動建立</value></data>
   <data name="Settings_Load" xml:space="preserve"><value>📂  載入設定</value></data>
   <data name="Settings_Save" xml:space="preserve"><value>💾  儲存</value></data>
   <data name="Settings_SaveAs" xml:space="preserve"><value>📄  另存新檔</value></data>
@@ -135,6 +136,7 @@
   <data name="Status_Canceling" xml:space="preserve"><value>正在取消部署...</value></data>
   <data name="Status_TestingConn" xml:space="preserve"><value>正在測試連線...</value></data>
   <data name="Status_ConnSuccess" xml:space="preserve"><value>✓ 連線成功</value></data>
+  <data name="Status_ConnSuccessDbWillCreate" xml:space="preserve"><value>✓ 伺服器連線成功 — 資料庫尚不存在，部署時將自動建立</value></data>
   <data name="Status_ConnFailed" xml:space="preserve"><value>✗ 連線失敗</value></data>
   <data name="Status_ConnFailedWith" xml:space="preserve"><value>✗ 連線失敗: {0}</value></data>
 

@@ -123,7 +123,31 @@ public class DeployOrchestrator : IDeployOrchestrator
 
         // ═══ Phase 2: 內省資料庫 ═══
         _logger.LogInformation("Introspecting database schema...");
-        var actualTables = await introspector.GetAllTableSchemasAsync(ct);
+        Dictionary<string, TableSchema> actualTables;
+
+        if (settings.Options.CreateDatabaseIfNotExists)
+        {
+            // 若啟用自動建立，先檢查 DB 是否存在；不存在則視為空資料庫（所有物件皆為新增），
+            // 此階段不建立 DB（由呼叫端的 deploy 流程負責建立）。
+            var serverConnStr = settings.Connection.ToServerConnectionString();
+            var dbExists = await DatabaseInitializer.DatabaseExistsAsync(serverConnStr, settings.Connection.Database, ct);
+            if (dbExists)
+            {
+                actualTables = await introspector.GetAllTableSchemasAsync(ct);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Database '{Database}' does not exist — treating as empty (all schema objects will be shown as new)",
+                    settings.Connection.Database);
+                actualTables = new Dictionary<string, TableSchema>();
+            }
+        }
+        else
+        {
+            actualTables = await introspector.GetAllTableSchemasAsync(ct);
+        }
+
         _logger.LogInformation("Database has {Count} table(s)", actualTables.Count);
 
         // ═══ Phase 3: 差異比對 ═══

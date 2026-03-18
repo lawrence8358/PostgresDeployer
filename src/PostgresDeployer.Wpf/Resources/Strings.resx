@@ -99,6 +99,7 @@
   <data name="Settings_DeployOptions" xml:space="preserve"><value>⚡  Deploy Options</value></data>
   <data name="Settings_SeedData" xml:space="preserve"><value>Run init data scripts (Seed Data)</value></data>
   <data name="Settings_StopOnError" xml:space="preserve"><value>Stop on error</value></data>
+  <data name="Settings_CreateDbIfNotExists" xml:space="preserve"><value>Auto-create database if it does not exist</value></data>
   <data name="Settings_Load" xml:space="preserve"><value>📂  Load Settings</value></data>
   <data name="Settings_Save" xml:space="preserve"><value>💾  Save</value></data>
   <data name="Settings_SaveAs" xml:space="preserve"><value>📄  Save As</value></data>
@@ -135,6 +136,7 @@
   <data name="Status_Canceling" xml:space="preserve"><value>Canceling deploy...</value></data>
   <data name="Status_TestingConn" xml:space="preserve"><value>Testing connection...</value></data>
   <data name="Status_ConnSuccess" xml:space="preserve"><value>✓ Connection successful</value></data>
+  <data name="Status_ConnSuccessDbWillCreate" xml:space="preserve"><value>✓ Server connection OK — database does not exist yet, will be created on deploy</value></data>
   <data name="Status_ConnFailed" xml:space="preserve"><value>✗ Connection failed</value></data>
   <data name="Status_ConnFailedWith" xml:space="preserve"><value>✗ Connection failed: {0}</value></data>
 

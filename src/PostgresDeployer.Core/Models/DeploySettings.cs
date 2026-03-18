@@ -31,8 +31,12 @@ public class DeploySettings
     public static DeploySettings LoadFromFile(string filePath)
     {
         var json = File.ReadAllText(filePath);
-        return JsonSerializer.Deserialize<DeploySettings>(json, JsonOptions)
+        var settings = JsonSerializer.Deserialize<DeploySettings>(json, JsonOptions)
             ?? throw new InvalidOperationException($"無法從檔案反序列化設定: {filePath}");
+        // 若設定檔使用 connectionString 欄位，解析並填入個別欄位
+        if (!string.IsNullOrEmpty(settings.Connection.ConnectionString))
+            settings.Connection.ApplyConnectionString(settings.Connection.ConnectionString);
+        return settings;
     }
 
     /// <summary>儲存設定到 JSON 檔案</summary>

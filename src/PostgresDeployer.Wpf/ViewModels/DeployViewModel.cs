@@ -198,6 +198,16 @@ public partial class DeployViewModel : ObservableObject
             var logger = loggerFactory.CreateLogger<DeployOrchestrator>();
             var orchestrator = new DeployOrchestrator(logger, loggerFactory);
 
+            // 若啟用自動建立資料庫，在執行前確保 DB 存在（分析時不建立，執行時才建立）
+            if (settings.Options.CreateDatabaseIfNotExists)
+            {
+                var dispatcher2 = Application.Current.Dispatcher;
+                var dbProgress = new Progress<string>(msg =>
+                    dispatcher2.Invoke(() => StatusText = msg));
+                await Task.Run(() => Core.Services.DatabaseInitializer.EnsureDatabaseExistsAsync(
+                    settings.Connection, dbProgress, _cts.Token));
+            }
+
             var dispatcher = Application.Current.Dispatcher;
             var progress = new Progress<string>(msg =>
             {

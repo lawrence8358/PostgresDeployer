@@ -1,13 +1,22 @@
 using System.CommandLine;
 using PostgresDeployer.Cli.Commands;
+using PostgresDeployer.Cli.Helpers;
 
-// ═══ Shared options ═══
+// ═══ Shared connection options ═══
 var configOption = new Option<string?>("--config", "-c") { Description = "Path to JSON settings file" };
 var hostOption = new Option<string?>("--host", "-H") { Description = "PostgreSQL host address" };
 var portOption = new Option<int?>("--port", "-P") { Description = "PostgreSQL port" };
 var databaseOption = new Option<string?>("--database", "-d") { Description = "Database name" };
 var usernameOption = new Option<string?>("--username", "-u") { Description = "Username" };
 var passwordOption = new Option<string?>("--password", "-p") { Description = "Password" };
+var connectionStringOption = new Option<string?>("--connection-string", "-s")
+{
+    Description = "Full connection string (overrides --host / --port / --database / --username / --password)"
+};
+var createDbOption = new Option<bool>("--create-db-if-not-exists")
+{
+    Description = "Automatically create the target database if it does not exist"
+};
 
 // ═══ Path options ═══
 var schemaOption = new Option<string?>("--schema") { Description = "Schema DDL directory path (Tables/Views/Functions/Sequences/Procedures)" };
@@ -22,6 +31,8 @@ deployCommand.Add(portOption);
 deployCommand.Add(databaseOption);
 deployCommand.Add(usernameOption);
 deployCommand.Add(passwordOption);
+deployCommand.Add(connectionStringOption);
+deployCommand.Add(createDbOption);
 deployCommand.Add(schemaOption);
 deployCommand.Add(initDataOption);
 deployCommand.Add(extensionsOption);
@@ -41,19 +52,24 @@ deployCommand.Add(stopOnErrorOption);
 deployCommand.SetAction(async parseResult =>
 {
     return await DeployCommand.HandleAsync(
-        parseResult.GetValue(configOption),
-        parseResult.GetValue(hostOption),
-        parseResult.GetValue(portOption),
-        parseResult.GetValue(databaseOption),
-        parseResult.GetValue(usernameOption),
-        parseResult.GetValue(passwordOption),
+        new CliArgs
+        {
+            ConfigPath = parseResult.GetValue(configOption),
+            Host = parseResult.GetValue(hostOption),
+            Port = parseResult.GetValue(portOption),
+            Database = parseResult.GetValue(databaseOption),
+            Username = parseResult.GetValue(usernameOption),
+            Password = parseResult.GetValue(passwordOption),
+            ConnectionString = parseResult.GetValue(connectionStringOption),
+            Schema = parseResult.GetValue(schemaOption),
+            InitData = parseResult.GetValue(initDataOption),
+            Extensions = parseResult.GetValue(extensionsOption),
+            CreateDatabaseIfNotExists = parseResult.GetValue(createDbOption) ? true : null
+        },
         parseResult.GetValue(dryRunOption),
         parseResult.GetValue(yesOption),
         parseResult.GetValue(onlyOption)!,
         parseResult.GetValue(stopOnErrorOption),
-        parseResult.GetValue(schemaOption),
-        parseResult.GetValue(initDataOption),
-        parseResult.GetValue(extensionsOption),
         parseResult.GetValue(logFileOption));
 });
 
@@ -65,6 +81,8 @@ diffCommand.Add(portOption);
 diffCommand.Add(databaseOption);
 diffCommand.Add(usernameOption);
 diffCommand.Add(passwordOption);
+diffCommand.Add(connectionStringOption);
+diffCommand.Add(createDbOption);
 diffCommand.Add(schemaOption);
 diffCommand.Add(initDataOption);
 diffCommand.Add(extensionsOption);
@@ -75,15 +93,20 @@ diffCommand.Add(diffOutputOption);
 diffCommand.SetAction(async parseResult =>
 {
     return await DiffCommand.HandleAsync(
-        parseResult.GetValue(configOption),
-        parseResult.GetValue(hostOption),
-        parseResult.GetValue(portOption),
-        parseResult.GetValue(databaseOption),
-        parseResult.GetValue(usernameOption),
-        parseResult.GetValue(passwordOption),
-        parseResult.GetValue(schemaOption),
-        parseResult.GetValue(initDataOption),
-        parseResult.GetValue(extensionsOption),
+        new CliArgs
+        {
+            ConfigPath = parseResult.GetValue(configOption),
+            Host = parseResult.GetValue(hostOption),
+            Port = parseResult.GetValue(portOption),
+            Database = parseResult.GetValue(databaseOption),
+            Username = parseResult.GetValue(usernameOption),
+            Password = parseResult.GetValue(passwordOption),
+            ConnectionString = parseResult.GetValue(connectionStringOption),
+            Schema = parseResult.GetValue(schemaOption),
+            InitData = parseResult.GetValue(initDataOption),
+            Extensions = parseResult.GetValue(extensionsOption),
+            CreateDatabaseIfNotExists = parseResult.GetValue(createDbOption) ? true : null
+        },
         parseResult.GetValue(diffOutputOption));
 });
 
@@ -95,16 +118,23 @@ testConnCommand.Add(portOption);
 testConnCommand.Add(databaseOption);
 testConnCommand.Add(usernameOption);
 testConnCommand.Add(passwordOption);
+testConnCommand.Add(connectionStringOption);
+testConnCommand.Add(createDbOption);
 
 testConnCommand.SetAction(async parseResult =>
 {
     return await TestConnectionCommand.HandleAsync(
-        parseResult.GetValue(configOption),
-        parseResult.GetValue(hostOption),
-        parseResult.GetValue(portOption),
-        parseResult.GetValue(databaseOption),
-        parseResult.GetValue(usernameOption),
-        parseResult.GetValue(passwordOption));
+        new CliArgs
+        {
+            ConfigPath = parseResult.GetValue(configOption),
+            Host = parseResult.GetValue(hostOption),
+            Port = parseResult.GetValue(portOption),
+            Database = parseResult.GetValue(databaseOption),
+            Username = parseResult.GetValue(usernameOption),
+            Password = parseResult.GetValue(passwordOption),
+            ConnectionString = parseResult.GetValue(connectionStringOption),
+            CreateDatabaseIfNotExists = parseResult.GetValue(createDbOption) ? true : null
+        });
 });
 
 // ═══ init command ═══

@@ -7,72 +7,48 @@ using PostgresDeployer.Core.Services;
 
 public static class DeployCommand
 {
+    private const string Separator = "═══════════════════════════════════════════════════════";
+
     public static async Task<int> HandleAsync(
-        string? config, string? host, int? port, string? database,
-        string? username, string? password,
+        CliArgs args,
         bool dryRun, bool yes, string only, bool stopOnError,
-        string? schema, string? initData,
-        string? extensions, string? logFile)
+        string? logFile)
     {
         try
         {
-            return await HandleCoreAsync(
-                config, host, port, database, username, password,
-                dryRun, yes, only, stopOnError,
-                schema, initData,
-                extensions, logFile);
+            return await HandleCoreAsync(args, dryRun, yes, only, stopOnError, logFile);
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error: {ex.Message}");
+            await Console.Error.WriteLineAsync($"Error: {ex.Message}");
             return 1;
         }
     }
 
     private static async Task<int> HandleCoreAsync(
-        string? config, string? host, int? port, string? database,
-        string? username, string? password,
+        CliArgs args,
         bool dryRun, bool yes, string only, bool stopOnError,
-        string? schema, string? initData,
-        string? extensions, string? logFile)
+        string? logFile)
     {
         // 1. 合併設定
-        var settings = SettingsMerger.Merge(
-            config, host, port, database, username, password,
-            schema, initData, extensions);
-
+        var settings = SettingsMerger.Merge(args);
         settings.Options.StopOnError = stopOnError;
+        ApplyOnlyFilter(settings, only);
 
         // 2. 驗證必要參數
         if (string.IsNullOrEmpty(settings.Connection.Database))
         {
-            Console.Error.WriteLine("Error: database name is required (--database or config file)");
+            await Console.Error.WriteLineAsync("Error: database name is required (--database, --connection-string, or config file)");
             return 1;
         }
 
-        // 3. 依 --only 篩選
-        switch (only.ToLowerInvariant())
-        {
-            case "tables":
-                settings.Options.ExecuteSeedData = false;
-                break;
-            case "seeds":
-                settings.Options.ExecuteSeedData = true;
-                break;
-            case "views":
-            case "all":
-            default:
-                break;
-        }
-
-        // 4. 設定日誌
+        // 3. 設定日誌
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
             builder.SetMinimumLevel(LogLevel.Information);
         });
 
-        // 若指定 logFile，寫入日誌到檔案
         StreamWriter? logWriter = null;
         if (!string.IsNullOrEmpty(logFile))
         {
@@ -86,17 +62,24 @@ public static class DeployCommand
         {
             var logger = loggerFactory.CreateLogger<DeployOrchestrator>();
 
-            // 5. 顯示連線資訊
+            // 4. 顯示連線資訊
             Console.WriteLine($"Target:   {settings.Connection.Host}:{settings.Connection.Port}/{settings.Connection.Database}");
             Console.WriteLine($"Username: {settings.Connection.Username}");
             Console.WriteLine($"Schema:   {settings.Paths.Schema}");
             Console.WriteLine();
 
+            // 5. 若啟用 CreateDatabaseIfNotExists，先確保資料庫存在
+            if (settings.Options.CreateDatabaseIfNotExists)
+            {
+                var dbProgress = new Progress<string>(msg => Console.WriteLine($"  {msg}"));
+                await DatabaseInitializer.EnsureDatabaseExistsAsync(settings.Connection, dbProgress);
+            }
+
             // 6. 測試連線
             var introspector = new SchemaIntrospector(settings.Connection.ToConnectionString());
             if (!await introspector.TestConnectionAsync())
             {
-                Console.Error.WriteLine("Error: cannot connect to database");
+                await Console.Error.WriteLineAsync("Error: cannot connect to database");
                 return 1;
             }
             Console.WriteLine("Database connection successful");
@@ -137,46 +120,65 @@ public static class DeployCommand
             }
 
             // 12. 執行
-            var progress = new Progress<string>(msg =>
+            var deployProgress = new Progress<string>(msg =>
             {
                 Console.WriteLine($"  {msg}");
                 logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}] {msg}");
             });
-            var results = await orchestrator.ExecuteAsync(settings, plan, progress);
+            var results = await orchestrator.ExecuteAsync(settings, plan, deployProgress);
 
             // 13. 顯示結果
             Console.WriteLine();
             PrintResults(results);
 
             // 14. 寫入 RunScript
-            try
-            {
-                var runScriptWriter = new RunScriptWriter();
-                var hostInfo = $"{settings.Connection.Host}:{settings.Connection.Port}/{settings.Connection.Database}";
-                var exeDir = AppContext.BaseDirectory;
-                var scriptPath = runScriptWriter.Write(plan, hostInfo, exeDir);
-                Console.WriteLine();
-                Console.WriteLine($"RunScript saved: {scriptPath}");
-                logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}] RunScript saved: {scriptPath}");
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Warning: failed to write RunScript — {ex.Message}");
-            }
+            await WriteRunScriptAsync(plan, settings, logWriter);
 
             return results.All(r => r.Success) ? 0 : 1;
         }
         finally
         {
-            logWriter?.Dispose();
+            if (logWriter != null)
+                await logWriter.DisposeAsync();
+        }
+    }
+
+    private static void ApplyOnlyFilter(DeploySettings settings, string only)
+    {
+        switch (only.ToLowerInvariant())
+        {
+            case "tables":
+                settings.Options.ExecuteSeedData = false;
+                break;
+            case "seeds":
+                settings.Options.ExecuteSeedData = true;
+                break;
+        }
+    }
+
+    private static async Task WriteRunScriptAsync(
+        DeployPlan plan, DeploySettings settings, StreamWriter? logWriter)
+    {
+        try
+        {
+            var runScriptWriter = new RunScriptWriter();
+            var hostInfo = $"{settings.Connection.Host}:{settings.Connection.Port}/{settings.Connection.Database}";
+            var scriptPath = runScriptWriter.Write(plan, hostInfo, AppContext.BaseDirectory);
+            await Console.Out.WriteLineAsync();
+            await Console.Out.WriteLineAsync($"RunScript saved: {scriptPath}");
+            logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}] RunScript saved: {scriptPath}");
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Warning: failed to write RunScript — {ex.Message}");
         }
     }
 
     private static void PrintPlanSummary(DeployPlan plan)
     {
-        Console.WriteLine("═══════════════════════════════════════════════════════");
+        Console.WriteLine(Separator);
         Console.WriteLine(" Deployment Plan");
-        Console.WriteLine("═══════════════════════════════════════════════════════");
+        Console.WriteLine(Separator);
 
         foreach (var group in plan.Groups)
         {
@@ -208,15 +210,12 @@ public static class DeployCommand
             }
         }
 
-        // 顯示注意事項
         if (plan.Cautions.Count > 0)
         {
             Console.WriteLine();
             Console.WriteLine($"  [Cautions] ({plan.Cautions.Count} item(s))");
             foreach (var caution in plan.Cautions)
-            {
                 Console.WriteLine($"    [!] {caution.CautionMessage}");
-            }
         }
 
         Console.WriteLine();
@@ -225,9 +224,9 @@ public static class DeployCommand
 
     private static void PrintResults(List<DeployResult> results)
     {
-        Console.WriteLine("═══════════════════════════════════════════════════════");
+        Console.WriteLine(Separator);
         Console.WriteLine(" Execution Result");
-        Console.WriteLine("═══════════════════════════════════════════════════════");
+        Console.WriteLine(Separator);
 
         foreach (var result in results)
         {

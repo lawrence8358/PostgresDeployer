@@ -48,6 +48,8 @@ PostgresDeployer takes the **desired state** approach:
 - CLI for scripted and CI/CD deployments
 - WPF desktop application for interactive use
 - Runtime language switching (English / 繁體中文)
+- Connection string support for CI/CD simplicity (`--connection-string`)
+- Auto-create database if it does not exist (`--create-db-if-not-exists`)
 
 ## Screenshots
 
@@ -161,6 +163,8 @@ All commands accept connection parameters that override the config file:
 | `--database` | `-d` | Database name |
 | `--username` | `-u` | Username |
 | `--password` | `-p` | Password |
+| `--connection-string` | `-s` | Full connection string (overrides all individual connection options) |
+| `--create-db-if-not-exists` | | Auto-create the database if it does not exist |
 
 **`deploy` Specific Options**
 
@@ -211,20 +215,61 @@ Generate a config file with `pgdeploy init`, then edit to match your environment
   "extensions": ["pgcrypto"],
   "options": {
     "executeSeedData": true,
-    "stopOnError": true
+    "stopOnError": true,
+    "createDatabaseIfNotExists": false
+  }
+}
+```
+
+You can also specify the connection as a single connection string instead of individual fields:
+
+```json
+{
+  "connection": {
+    "connectionString": "Host=localhost;Port=5432;Database=MyDatabase;Username=postgres;Password=secret"
+  },
+  "paths": {
+    "schema": "C:/Projects/MyApp/Schema",
+    "initData": "C:/Projects/MyApp/InitData"
+  },
+  "extensions": ["pgcrypto"],
+  "options": {
+    "executeSeedData": true,
+    "stopOnError": true,
+    "createDatabaseIfNotExists": false
   }
 }
 ```
 
 > **Note**: `schema` and `initData` must be absolute paths (e.g. `C:\Projects\MyApp\Schema`). Relative paths are not supported.
 
-**Parameter priority**: CLI arguments > config file > defaults
+**Parameter priority**: CLI `--connection-string` > CLI individual fields > config `connectionString` > config individual fields > defaults
+
+### Auto-Create Database
+
+When `--create-db-if-not-exists` is set (or `"createDatabaseIfNotExists": true` in the config), PostgresDeployer will:
+
+- **`deploy` / `diff`**: Connect to the PostgreSQL server first; if the target database does not exist, create it before proceeding. An empty database means all schema objects will be treated as new additions.
+- **`test-connection`**: Test the server connection (without specifying the target database). If the server is reachable, it reports whether the target database already exists or will be created on the next deploy.
+
+> **Note**: The PostgreSQL user must have `CREATEDB` privilege for automatic database creation to succeed.
 
 ### CI/CD Integration
 
 In automated pipelines, storing database credentials in a config file committed to source control is a security risk. The recommended approach is to keep only non-sensitive settings in the config file and inject credentials at runtime from your platform's secret management.
 
-**GitHub Actions example:**
+**GitHub Actions — using `--connection-string`:**
+
+```yaml
+- name: Deploy database schema
+  run: |
+    pgdeploy deploy \
+      --config PostgresDeployer.json \
+      --connection-string "Host=${{ secrets.DB_HOST }};Database=${{ secrets.DB_NAME }};Username=${{ secrets.DB_USER }};Password=${{ secrets.DB_PASSWORD }}" \
+      --yes
+```
+
+**GitHub Actions — using individual options:**
 
 ```yaml
 - name: Deploy database schema
@@ -235,6 +280,19 @@ In automated pipelines, storing database credentials in a config file committed 
       --database ${{ secrets.DB_NAME }} \
       --username ${{ secrets.DB_USER }} \
       --password ${{ secrets.DB_PASSWORD }} \
+      --yes
+```
+
+**Auto-create database on first deploy:**
+
+```yaml
+- name: Deploy database schema
+  run: |
+    pgdeploy deploy \
+      --connection-string "${{ secrets.DB_CONNECTION_STRING }}" \
+      --schema "C:\SqlScripts\Schema" \
+      --init-data "C:\SqlScripts\InitData" \
+      --create-db-if-not-exists \
       --yes
 ```
 
@@ -254,14 +312,11 @@ pgdeploy deploy \
 
 ```bash
 pgdeploy deploy \
-  --host "$DB_HOST" \
-  --port 5432 \
-  --database "$DB_NAME" \
-  --username "$DB_USER" \
-  --password "$DB_PASSWORD" \
+  --connection-string "Host=$DB_HOST;Port=5432;Database=$DB_NAME;Username=$DB_USER;Password=$DB_PASSWORD" \
   --schema "C:\SqlScripts\Schema" \
   --init-data "C:\SqlScripts\InitData" \
   --extensions "pgcrypto,uuid-ossp" \
+  --create-db-if-not-exists \
   --stop-on-error \
   --yes
 ```
@@ -275,6 +330,11 @@ The WPF desktop application provides an interactive interface for deploying and 
 1. **Settings** — load or create a config file, enter connection details, and test the connection
 2. **Deploy** — analyze schema differences, review the change list, and execute deployment
 3. **Log** — real-time deployment log with timestamps
+
+**Deploy Options** in the Settings page include:
+- **Run init data scripts** — whether to execute seed data on deploy
+- **Stop on error** — halt deployment if any group fails
+- **Auto-create database if not exists** — automatically create the target database when it does not exist; the Test Connection button will verify the server connection and report whether the database needs to be created
 
 The language can be switched at runtime (English / 繁體中文) from the sidebar.
 

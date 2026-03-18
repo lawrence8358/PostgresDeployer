@@ -34,11 +34,11 @@ public class ConnectionSettings
     public void ApplyConnectionString(string connectionString)
     {
         var builder = new NpgsqlConnectionStringBuilder(connectionString);
-        if (!string.IsNullOrEmpty(builder.Host)) Host = builder.Host;
-        if (builder.Port > 0) Port = builder.Port;
-        if (!string.IsNullOrEmpty(builder.Database)) Database = builder.Database;
-        if (!string.IsNullOrEmpty(builder.Username)) Username = builder.Username;
-        if (!string.IsNullOrEmpty(builder.Password)) Password = builder.Password;
+        if (builder.ContainsKey("Host") && !string.IsNullOrEmpty(builder.Host)) Host = builder.Host;
+        if (builder.ContainsKey("Port") && builder.Port > 0) Port = builder.Port;
+        if (builder.ContainsKey("Database") && !string.IsNullOrEmpty(builder.Database)) Database = builder.Database;
+        if (builder.ContainsKey("Username") && !string.IsNullOrEmpty(builder.Username)) Username = builder.Username;
+        if (builder.ContainsKey("Password") && !string.IsNullOrEmpty(builder.Password)) Password = builder.Password;
     }
 
     /// <summary>

@@ -69,7 +69,7 @@ public static class DeployCommand
             Console.WriteLine();
 
             // 5. 若啟用 CreateDatabaseIfNotExists，先確保資料庫存在
-            if (settings.Options.CreateDatabaseIfNotExists)
+            if (!dryRun && settings.Options.CreateDatabaseIfNotExists)
             {
                 var dbProgress = new Progress<string>(msg => Console.WriteLine($"  {msg}"));
                 await DatabaseInitializer.EnsureDatabaseExistsAsync(settings.Connection, dbProgress);

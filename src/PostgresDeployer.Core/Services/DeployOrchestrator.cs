@@ -1,5 +1,6 @@
-namespace PostgresDeployer.Core.Services;
+﻿namespace PostgresDeployer.Core.Services;
 
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PostgresDeployer.Core.Interfaces;
@@ -84,6 +85,9 @@ public class DeployOrchestrator : IDeployOrchestrator
             "Classification — Sequences: {Seq}, Functions: {Func}, Procedures: {Proc}, Tables: {Tbl}, Views: {View}",
             sequenceFiles.Count, functionFiles.Count, procedureFiles.Count,
             desiredTables.Count, viewFiles.Count);
+
+        // 按外鍵依賴拓撲排序，確保被引用的資料表先建立
+        desiredTables = TopologicalSortTables(desiredTables);
 
         // Sequences
         if (sequenceFiles.Count > 0)
@@ -432,6 +436,79 @@ public class DeployOrchestrator : IDeployOrchestrator
         return results;
     }
 
+    private static readonly Regex FkReferencesPattern = new(
+        @"\bREFERENCES\s+""([^""]+)""",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// 依外鍵依賴進行拓撲排序（Kahn 演算法），確保被引用的資料表先出現。
+    /// 若存在迴圈依賴，剩餘資料表以原始順序附加於末尾。
+    /// </summary>
+    private static List<TableSchema> TopologicalSortTables(List<TableSchema> tables)
+    {
+        if (tables.Count <= 1)
+            return tables;
+
+        var tableNames = tables.Select(t => t.TableName).ToHashSet(StringComparer.Ordinal);
+        var tableMap   = tables.ToDictionary(t => t.TableName);
+
+        // deps[table] = 此資料表所依賴的外部資料表名稱集合
+        var deps = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var table in tables)
+        {
+            var refs = FkReferencesPattern.Matches(table.RawSql ?? "")
+                .Select(m => m.Groups[1].Value)
+                .Where(name => tableNames.Contains(name) && name != table.TableName)
+                .ToHashSet(StringComparer.Ordinal);
+            deps[table.TableName] = refs;
+        }
+
+        // successors[A] = 依賴 A 的資料表集合（A 必須先建立）
+        var successors = tables.ToDictionary(
+            t => t.TableName,
+            _ => new HashSet<string>(StringComparer.Ordinal));
+        var inDegree = tables.ToDictionary(t => t.TableName, _ => 0);
+
+        foreach (var (table, tableRefs) in deps)
+        {
+            foreach (var dep in tableRefs)
+            {
+                successors[dep].Add(table);
+                inDegree[table]++;
+            }
+        }
+
+        // Kahn 演算法：由 in-degree=0 的節點開始
+        var queue = new Queue<string>(
+            tables
+                .Where(t => inDegree[t.TableName] == 0)
+                .Select(t => t.TableName)
+                .OrderBy(n => n, StringComparer.Ordinal));
+
+        var result = new List<TableSchema>(tables.Count);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            result.Add(tableMap[current]);
+
+            foreach (var next in successors[current].OrderBy(n => n, StringComparer.Ordinal))
+            {
+                if (--inDegree[next] == 0)
+                    queue.Enqueue(next);
+            }
+        }
+
+        // 若有迴圈依賴，將剩餘資料表以原始順序附加
+        if (result.Count < tables.Count)
+        {
+            var processed = result.Select(t => t.TableName).ToHashSet(StringComparer.Ordinal);
+            foreach (var table in tables)
+                if (!processed.Contains(table.TableName))
+                    result.Add(table);
+        }
+
+        return result;
+    }
     /// <summary>
     /// 移除相對路徑的第一個目錄區段（通常為與群組名稱重複的類型資料夾），保留後續深層路徑。
     /// 例：Sequences\SequenceNo.sql → SequenceNo.sql

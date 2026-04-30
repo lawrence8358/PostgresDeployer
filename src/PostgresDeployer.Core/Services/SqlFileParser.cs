@@ -1,4 +1,4 @@
-namespace PostgresDeployer.Core.Services;
+﻿namespace PostgresDeployer.Core.Services;
 
 using System.Text.RegularExpressions;
 using PostgresDeployer.Core.Helpers;
@@ -16,7 +16,7 @@ public class SqlFileParser : ISqlFileParser
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex IndexPattern = new(
-        @"CREATE\s+(UNIQUE\s+)?INDEX\s+(IF\s+NOT\s+EXISTS\s+)?""([^""]+)""\s+ON\s+""([^""]+)""\s*\(([^)]+)\)",
+        @"CREATE\s+(UNIQUE\s+)?INDEX\s+(IF\s+NOT\s+EXISTS\s+)?""([^""]+)""\s+ON\s+(?:[a-zA-Z_]\w*\.)?""([^""]+)""\s*\(([^)]+)\)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ColumnNamePattern = new(

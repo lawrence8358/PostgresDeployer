@@ -33,5 +33,11 @@ public enum ChangeType
     DropColumn,
 
     /// <summary>重建主鍵（DROP CONSTRAINT + ADD CONSTRAINT PRIMARY KEY）</summary>
-    RecreatePrimaryKey
+    RecreatePrimaryKey,
+
+    /// <summary>建立新視圖（View 不存在於資料庫）</summary>
+    CreateView,
+
+    /// <summary>取代視圖（先 DROP IF EXISTS CASCADE，再重建，因 View 定義已變更）</summary>
+    ReplaceView,
 }

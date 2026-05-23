@@ -50,7 +50,7 @@ public class SchemaDifferTests
 
         Assert.Single(changes);
         Assert.Equal(ChangeType.CreateTable, changes[0].Type);
-        Assert.Equal("NewTable", changes[0].TableName);
+        Assert.Equal("NewTable", changes[0].EntityName);
         Assert.NotNull(changes[0].Sql);
     }
 
@@ -273,4 +273,151 @@ public class SchemaDifferTests
         Assert.NotNull(alterType);
         Assert.NotNull(alterType!.CautionMessage);
     }
+
+    #region ComputeViewChanges
+
+    [Fact]
+    public void ComputeViewChanges_NewView_ReturnsCreateView()
+    {
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"Id\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
+        var existingCols = new Dictionary<string, List<string>>(); // View 不存在於 DB
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.CreateView, changes[0].Type);
+        Assert.Equal("vw_Test", changes[0].EntityName);
+        Assert.Equal(sql, changes[0].Sql);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_ExistingViewColumnChanged_ReturnsReplaceView()
+    {
+        // SQL 欄位：Id, Name（與 DB 不同）
+        const string newSql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"Id\", 'x' AS \"Name\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", newSql) };
+        // DB 目前只有 Id 一個欄位
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["Id"]
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
+        Assert.Equal("vw_Test", changes[0].EntityName);
+        Assert.Equal(newSql, changes[0].Sql);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_ExistingViewColumnsUnchanged_ReturnsEmpty()
+    {
+        // SQL 欄位與 DB 一致 → 不應標記為變更
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT t.\"Id\", t.\"Name\" FROM \"T\" t;";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["Id", "Name"]
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Empty(changes);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_ExistingViewColumnOrderChanged_ReturnsReplaceView()
+    {
+        // 欄位順序改變 → 42P16 風險 → 應標記為 ReplaceView
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT t.\"Name\", t.\"Id\" FROM \"T\" t;";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["Id", "Name"]  // DB 中順序是 Id, Name
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_MixedViews_ReturnsBothTypes()
+    {
+        var desired = new List<(string ViewName, string SqlContent)>
+        {
+            ("vw_New",      "CREATE OR REPLACE VIEW \"vw_New\" AS SELECT 1 AS \"Id\";"),
+            ("vw_Changed",  "CREATE OR REPLACE VIEW \"vw_Changed\" AS SELECT 1 AS \"Id\", 2 AS \"NewCol\";"),
+            ("vw_Same",     "CREATE OR REPLACE VIEW \"vw_Same\" AS SELECT t.\"Id\" FROM \"T\" t;")
+        };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Changed"] = ["Id"],              // 欄位改變
+            ["vw_Same"]    = ["Id"]               // 欄位相同
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Equal(2, changes.Count); // vw_New (CreateView) + vw_Changed (ReplaceView)；vw_Same 不加入
+        Assert.Equal(ChangeType.CreateView,   changes.First(c => c.EntityName == "vw_New").Type);
+        Assert.Equal(ChangeType.ReplaceView,  changes.First(c => c.EntityName == "vw_Changed").Type);
+        Assert.DoesNotContain(changes, c => c.EntityName == "vw_Same");
+    }
+
+    [Fact]
+    public void ComputeViewChanges_SelectStar_SkipsComparison()
+    {
+        // SELECT * 無法解析欄位 → 跳過（不加入 changes）
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Star\" AS SELECT * FROM \"T\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Star", sql) };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Star"] = ["Id", "Name"]
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Empty(changes); // SELECT * 無法比對，靜默跳過
+    }
+
+    [Fact]
+    public void ComputeViewChanges_EmptyDesired_ReturnsEmpty()
+    {
+        var existingCols = new Dictionary<string, List<string>> { ["vw_Any"] = ["Id"] };
+        Assert.Empty(_differ.ComputeViewChanges([], existingCols));
+    }
+
+    #endregion
+
+    #region ExtractDesiredColumnNames
+
+    [Theory]
+    [InlineData(
+        "CREATE OR REPLACE VIEW \"vw\" AS SELECT t.\"Id\", t.\"Name\" FROM \"T\" t;",
+        new[] { "Id", "Name" })]
+    [InlineData(
+        "CREATE OR REPLACE VIEW \"vw\" AS SELECT mItem.\"Code\" AS \"ItemCode\", mGroup.\"Seq\" AS \"GroupSeq\" FROM \"T\" t;",
+        new[] { "ItemCode", "GroupSeq" })]
+    [InlineData(
+        "CREATE OR REPLACE VIEW \"vw\" AS SELECT \"Id\";",
+        new[] { "Id" })]
+    public void ExtractDesiredColumnNames_CommonPatterns_ReturnsNames(string sql, string[] expected)
+    {
+        var result = SchemaDiffer.ExtractDesiredColumnNames(sql);
+        Assert.NotNull(result);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("CREATE OR REPLACE VIEW \"vw\" AS SELECT * FROM \"T\";")]
+    public void ExtractDesiredColumnNames_Unparseable_ReturnsNull(string sql)
+    {
+        var result = SchemaDiffer.ExtractDesiredColumnNames(sql);
+        Assert.Null(result);
+    }
+
+    #endregion
 }

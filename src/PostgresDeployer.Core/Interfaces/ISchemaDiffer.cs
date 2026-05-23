@@ -18,4 +18,14 @@ public interface ISchemaDiffer
     List<SchemaChange> ComputeChanges(
         List<TableSchema> desired,
         Dictionary<string, TableSchema> actual);
+
+    /// <summary>
+    /// 計算 View 差異（依欄位名稱比對）。
+    /// </summary>
+    /// <param name="desiredViews">期望的 View 清單（ViewName, SQL 內容）</param>
+    /// <param name="existingViewColumns">資料庫現有 View 的欄位名稱（依順序），以 View 名稱為 key</param>
+    /// <returns>差異變更清單（CreateView 或 ReplaceView）</returns>
+    List<SchemaChange> ComputeViewChanges(
+        List<(string ViewName, string SqlContent)> desiredViews,
+        Dictionary<string, List<string>> existingViewColumns);
 }

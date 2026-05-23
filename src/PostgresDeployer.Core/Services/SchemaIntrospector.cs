@@ -241,6 +241,38 @@ public class SchemaIntrospector : ISchemaIntrospector
         return names;
     }
 
+    public async Task<Dictionary<string, List<string>>> GetViewColumnNamesAsync(CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string sql = """
+            SELECT c.table_name, c.column_name
+            FROM information_schema.columns c
+            JOIN information_schema.views v
+              ON c.table_schema = v.table_schema AND c.table_name = v.table_name
+            WHERE c.table_schema = 'public'
+            ORDER BY c.table_name, c.ordinal_position
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        while (await reader.ReadAsync(ct))
+        {
+            var viewName   = reader.GetString(0);
+            var columnName = reader.GetString(1);
+            if (!result.TryGetValue(viewName, out var cols))
+            {
+                cols = [];
+                result[viewName] = cols;
+            }
+            cols.Add(columnName);
+        }
+        return result;
+    }
+
     public async Task<List<string>> GetFunctionNamesAsync(CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);

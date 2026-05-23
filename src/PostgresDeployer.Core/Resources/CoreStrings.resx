@@ -79,6 +79,8 @@
   <data name="Diff_CreateIndex" xml:space="preserve"><value>Create index "{0}"</value></data>
   <data name="Diff_RecreateIndex" xml:space="preserve"><value>Recreate index "{0}" (definition changed)</value></data>
   <data name="Diff_DropIndex" xml:space="preserve"><value>Drop index "{0}" (not in SQL definition)</value></data>
+  <data name="Diff_CreateView" xml:space="preserve"><value>Create view "{0}" (new)</value></data>
+  <data name="Diff_ReplaceView" xml:space="preserve"><value>Replace view "{0}" (drop and recreate)</value></data>
 
   <!-- DeployExecutor: user-visible messages -->
   <data name="Deploy_Cancelled" xml:space="preserve"><value>Deployment cancelled by user</value></data>

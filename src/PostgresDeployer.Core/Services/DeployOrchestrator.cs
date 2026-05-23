@@ -128,6 +128,7 @@ public class DeployOrchestrator : IDeployOrchestrator
         // ═══ Phase 2: 內省資料庫 ═══
         _logger.LogInformation("Introspecting database schema...");
         Dictionary<string, TableSchema> actualTables;
+        Dictionary<string, List<string>> existingViewColumns;
 
         if (settings.Options.CreateDatabaseIfNotExists)
         {
@@ -138,6 +139,7 @@ public class DeployOrchestrator : IDeployOrchestrator
             if (dbExists)
             {
                 actualTables = await introspector.GetAllTableSchemasAsync(ct);
+                existingViewColumns = await introspector.GetViewColumnNamesAsync(ct);
             }
             else
             {
@@ -145,18 +147,33 @@ public class DeployOrchestrator : IDeployOrchestrator
                     "Database '{Database}' does not exist — treating as empty (all schema objects will be shown as new)",
                     settings.Connection.Database);
                 actualTables = new Dictionary<string, TableSchema>();
+                existingViewColumns = [];
             }
         }
         else
         {
             actualTables = await introspector.GetAllTableSchemasAsync(ct);
+            existingViewColumns = await introspector.GetViewColumnNamesAsync(ct);
         }
 
-        _logger.LogInformation("Database has {Count} table(s)", actualTables.Count);
+        _logger.LogInformation("Database has {Count} table(s), {ViewCount} view(s)",
+            actualTables.Count, existingViewColumns.Count);
 
         // ═══ Phase 3: 差異比對 ═══
         _logger.LogInformation("Computing schema differences...");
         var changes = differ.ComputeChanges(desiredTables, actualTables);
+
+        // View 差異比對：從 SQL 檔案中提取 View 名稱，與 DB 現有 View 比對
+        var desiredViews = new List<(string ViewName, string SqlContent)>();
+        foreach (var (fileName, content) in viewFiles)
+        {
+            var m = ViewNameRegex.Match(content);
+            if (m.Success)
+                desiredViews.Add((m.Groups[1].Value, content));
+            else
+                _logger.LogWarning("Cannot extract view name from file '{FileName}', skipping diff analysis for this view", fileName);
+        }
+        var viewChanges = differ.ComputeViewChanges(desiredViews, existingViewColumns);
 
         // ═══ Phase 4: 分類變更到對應群組 ═══
         var duplicates = desiredTables
@@ -189,13 +206,13 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.AddColumn:
                 {
-                    if (!tableMap.TryGetValue(change.TableName, out var table))
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
                         throw new InvalidOperationException(
-                            $"Diff produced a change for non-existent table: {change.TableName}");
+                            $"Diff produced a change for non-existent table: {change.EntityName}");
                     var col = table.Columns.FirstOrDefault(c => c.Name == change.ColumnName)
                         ?? throw new InvalidOperationException(
-                            $"Column not found in table {change.TableName}: {change.ColumnName}");
-                    change.Sql = generator.GenerateAddColumn(change.TableName, col);
+                            $"Column not found in table {change.EntityName}: {change.ColumnName}");
+                    change.Sql = generator.GenerateAddColumn(change.EntityName, col);
                     alterGroup.Statements.Add(change.Sql);
                     alterGroup.Changes.Add(change);
                     break;
@@ -203,14 +220,14 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.AlterColumnType:
                 {
-                    if (!tableMap.TryGetValue(change.TableName, out var table))
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
                         throw new InvalidOperationException(
-                            $"Diff produced a change for non-existent table: {change.TableName}");
+                            $"Diff produced a change for non-existent table: {change.EntityName}");
                     var col = table.Columns.FirstOrDefault(c => c.Name == change.ColumnName)
                         ?? throw new InvalidOperationException(
-                            $"Column not found in table {change.TableName}: {change.ColumnName}");
+                            $"Column not found in table {change.EntityName}: {change.ColumnName}");
                     change.Sql = generator.GenerateAlterColumnType(
-                        change.TableName, change.ColumnName!, col.RawType);
+                        change.EntityName, change.ColumnName!, col.RawType);
                     alterGroup.Statements.Add(change.Sql);
                     alterGroup.Changes.Add(change);
                     break;
@@ -218,14 +235,14 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.AlterColumnNullable:
                 {
-                    if (!tableMap.TryGetValue(change.TableName, out var table))
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
                         throw new InvalidOperationException(
-                            $"Diff produced a change for non-existent table: {change.TableName}");
+                            $"Diff produced a change for non-existent table: {change.EntityName}");
                     var col = table.Columns.FirstOrDefault(c => c.Name == change.ColumnName)
                         ?? throw new InvalidOperationException(
-                            $"Column not found in table {change.TableName}: {change.ColumnName}");
+                            $"Column not found in table {change.EntityName}: {change.ColumnName}");
                     change.Sql = generator.GenerateAlterColumnNullable(
-                        change.TableName, change.ColumnName!, col.IsNullable);
+                        change.EntityName, change.ColumnName!, col.IsNullable);
                     alterGroup.Statements.Add(change.Sql);
                     alterGroup.Changes.Add(change);
                     break;
@@ -233,15 +250,15 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.AlterColumnDefault:
                 {
-                    if (!tableMap.TryGetValue(change.TableName, out var table))
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
                         throw new InvalidOperationException(
-                            $"Diff produced a change for non-existent table: {change.TableName}");
+                            $"Diff produced a change for non-existent table: {change.EntityName}");
                     var col = table.Columns.FirstOrDefault(c => c.Name == change.ColumnName)
                         ?? throw new InvalidOperationException(
-                            $"Column not found in table {change.TableName}: {change.ColumnName}");
+                            $"Column not found in table {change.EntityName}: {change.ColumnName}");
                     var defValue = col.HasDefault ? col.DefaultValue : null;
                     change.Sql = generator.GenerateAlterColumnDefault(
-                        change.TableName, change.ColumnName!, defValue);
+                        change.EntityName, change.ColumnName!, defValue);
                     alterGroup.Statements.Add(change.Sql);
                     alterGroup.Changes.Add(change);
                     break;
@@ -249,13 +266,13 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.CreateIndex:
                 {
-                    if (!tableMap.TryGetValue(change.TableName, out var table))
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
                         break;
                     var idxDef = table.Indexes.FirstOrDefault(i =>
                         change.Description.Contains(i.Name));
                     if (idxDef != null)
                     {
-                        change.Sql = generator.GenerateCreateIndex(change.TableName, idxDef);
+                        change.Sql = generator.GenerateCreateIndex(change.EntityName, idxDef);
                         indexGroup.Statements.Add(change.Sql);
                         indexGroup.Changes.Add(change);
                     }
@@ -264,7 +281,7 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.RecreateIndex:
                 {
-                    if (!tableMap.TryGetValue(change.TableName, out var table))
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
                         break;
                     var idxDef = table.Indexes.FirstOrDefault(i =>
                         change.Description.Contains(i.Name));
@@ -272,7 +289,7 @@ public class DeployOrchestrator : IDeployOrchestrator
                     {
                         indexGroup.Statements.Add(generator.GenerateDropIndex(idxDef.Name));
                         indexGroup.Statements.Add(
-                            generator.GenerateCreateIndex(change.TableName, idxDef));
+                            generator.GenerateCreateIndex(change.EntityName, idxDef));
                         indexGroup.Changes.Add(change);
                     }
                     break;
@@ -293,27 +310,27 @@ public class DeployOrchestrator : IDeployOrchestrator
                 }
 
                 case ChangeType.DropColumn:
-                    change.Sql = generator.GenerateDropColumn(change.TableName, change.ColumnName!);
+                    change.Sql = generator.GenerateDropColumn(change.EntityName, change.ColumnName!);
                     alterGroup.Statements.Add(change.Sql);
                     alterGroup.Changes.Add(change);
                     break;
 
                 case ChangeType.RecreatePrimaryKey:
                 {
-                    var actualPk = actualTables.GetValueOrDefault(change.TableName)?.PrimaryKey;
-                    if (!tableMap.TryGetValue(change.TableName, out var desiredTable))
+                    var actualPk = actualTables.GetValueOrDefault(change.EntityName)?.PrimaryKey;
+                    if (!tableMap.TryGetValue(change.EntityName, out var desiredTable))
                         throw new InvalidOperationException(
-                            $"Diff produced a change for non-existent table: {change.TableName}");
+                            $"Diff produced a change for non-existent table: {change.EntityName}");
                     var desiredPk = desiredTable.PrimaryKey;
                     if (actualPk?.ConstraintName != null)
                     {
                         alterGroup.Statements.Add(
-                            generator.GenerateDropPrimaryKey(change.TableName, actualPk.ConstraintName));
+                            generator.GenerateDropPrimaryKey(change.EntityName, actualPk.ConstraintName));
                     }
                     if (desiredPk != null)
                     {
                         alterGroup.Statements.Add(
-                            generator.GenerateCreatePrimaryKey(change.TableName, desiredPk));
+                            generator.GenerateCreatePrimaryKey(change.EntityName, desiredPk));
                     }
                     alterGroup.Changes.Add(change);
                     break;
@@ -321,45 +338,37 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 default:
                     _logger.LogWarning("Unhandled change type: {Type}, table: {Table}",
-                        change.Type, change.TableName);
+                        change.Type, change.EntityName);
                     break;
             }
         }
 
         if (createGroup.Statements.Count > 0) plan.Groups.Add(createGroup);
 
-        // 如果有 AlterColumnType 變更，且有 View 檔案，則先 Drop 所有 Views（避免 PG 拒絕變更被視圖依賴的欄位型別）
-        bool hasAlterColumnType = changes.Any(c => c.Type == ChangeType.AlterColumnType);
-        if (hasAlterColumnType && viewFiles.Count > 0)
+        // 對於需要取代的 View（ReplaceView），在 Table 變更執行前先 DROP，
+        // 避免 PG 拒絕：(1) 欄位型別變更時的依賴鎖定，(2) CREATE OR REPLACE 無法改變欄位定義（42P16）
+        var replaceViewChanges = viewChanges.Where(c => c.Type == ChangeType.ReplaceView).ToList();
+        if (replaceViewChanges.Count > 0)
         {
             var dropViewsGroup = new DeployGroup { Name = "Drop Views (Pre-Alter)" };
-            var viewNameRegex = new System.Text.RegularExpressions.Regex(
-                @"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+""([^""]+)""",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-            // 倒序 Drop，避免依賴視圖互相鎖定（CASCADE 會自動處理依賴）
-            foreach (var (fileName, content) in Enumerable.Reverse(viewFiles))
+            // 倒序 Drop，減少視圖間相依性衝突（CASCADE 會自動處理剩餘依賴）
+            foreach (var vc in Enumerable.Reverse(replaceViewChanges))
             {
-                var m = viewNameRegex.Match(content);
-                if (m.Success)
-                {
-                    var viewName = m.Groups[1].Value;
-                    dropViewsGroup.Statements.Add($"DROP VIEW IF EXISTS \"{viewName}\" CASCADE;");
-                    dropViewsGroup.StatementLabels.Add(viewName);
-                }
+                dropViewsGroup.Statements.Add($"DROP VIEW IF EXISTS \"{vc.EntityName}\" CASCADE;");
+                dropViewsGroup.StatementLabels.Add(vc.EntityName);
             }
-            if (dropViewsGroup.Statements.Count > 0)
-            {
-                plan.Groups.Add(dropViewsGroup);
-                _logger.LogInformation("AlterColumnType detected, inserting Drop Views pre-step ({Count} view(s))",
-                    dropViewsGroup.Statements.Count);
-            }
+            plan.Groups.Add(dropViewsGroup);
+            _logger.LogInformation("Inserting Drop Views pre-step for {Count} existing view(s)",
+                replaceViewChanges.Count);
         }
 
         if (alterGroup.Statements.Count > 0) plan.Groups.Add(alterGroup);
         if (indexGroup.Statements.Count > 0) plan.Groups.Add(indexGroup);
 
-        // Views
+        // Views：所有 viewFiles 皆以 CREATE OR REPLACE VIEW 部署（idempotent）。
+        // viewChanges 僅用於 UI 顯示（Diff 結果）與決定 Pre-Drop 對象；
+        // 欄位未變但 SQL 主體有修改的 View 仍會被正確更新。
         if (viewFiles.Count > 0)
         {
             var viewGroup = new DeployGroup { Name = "Views" };
@@ -368,6 +377,7 @@ public class DeployOrchestrator : IDeployOrchestrator
                 viewGroup.Statements.Add(content);
                 viewGroup.StatementLabels.Add(StripFirstSegment(fileName));
             }
+            viewGroup.Changes.AddRange(viewChanges); // Diff 結果供 UI 顯示
             plan.Groups.Add(viewGroup);
         }
 
@@ -438,6 +448,10 @@ public class DeployOrchestrator : IDeployOrchestrator
 
     private static readonly Regex FkReferencesPattern = new(
         @"\bREFERENCES\s+""([^""]+)""",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex ViewNameRegex = new(
+        @"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:""[^""]*""\s*\.\s*)?""([^""]+)""",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>

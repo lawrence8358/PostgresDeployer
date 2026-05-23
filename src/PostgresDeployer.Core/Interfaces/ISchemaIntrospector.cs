@@ -20,6 +20,9 @@ public interface ISchemaIntrospector
     /// <summary>取得 public schema 下所有 View 名稱</summary>
     Task<List<string>> GetViewNamesAsync(CancellationToken ct = default);
 
+    /// <summary>取得 public schema 下所有 View 的名稱與欄位清單（有序）</summary>
+    Task<Dictionary<string, List<string>>> GetViewColumnNamesAsync(CancellationToken ct = default);
+
     /// <summary>取得 public schema 下所有 Function 名稱</summary>
     Task<List<string>> GetFunctionNamesAsync(CancellationToken ct = default);
 

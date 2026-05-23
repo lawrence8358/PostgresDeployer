@@ -8,8 +8,8 @@ public class SchemaChange
     /// <summary>變更類型</summary>
     public ChangeType Type { get; set; }
 
-    /// <summary>影響的資料表名稱</summary>
-    public string TableName { get; set; } = "";
+    /// <summary>影響的實體名稱（資料表名稱或 View 名稱，依 <see cref="Type"/> 決定）</summary>
+    public string EntityName { get; set; } = "";
 
     /// <summary>影響的欄位名稱（若適用）</summary>
     public string? ColumnName { get; set; }

@@ -204,6 +204,69 @@ public class SchemaIntrospector : ISchemaIntrospector
             }
         }
 
+        // ═══ 查詢外鍵約束 ═══
+        const string fkSql = """
+            SELECT
+                tc.constraint_name,
+                kcu.column_name,
+                ccu.table_name   AS ref_table,
+                ccu.column_name  AS ref_column,
+                rc.delete_rule,
+                rc.update_rule,
+                kcu.ordinal_position
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+               AND tc.table_schema   = kcu.table_schema
+               AND tc.table_name     = kcu.table_name
+            JOIN information_schema.referential_constraints rc
+                ON rc.constraint_name   = tc.constraint_name
+               AND rc.constraint_schema = tc.table_schema
+            JOIN information_schema.key_column_usage ccu
+                ON ccu.constraint_name  = rc.unique_constraint_name
+               AND ccu.table_schema     = rc.unique_constraint_schema
+               AND ccu.ordinal_position = kcu.ordinal_position
+            WHERE tc.table_schema    = 'public'
+              AND tc.table_name      = @tableName
+              AND tc.constraint_type = 'FOREIGN KEY'
+            ORDER BY tc.constraint_name, kcu.ordinal_position
+            """;
+
+        await using (var cmd = new NpgsqlCommand(fkSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@tableName", tableName);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            string? currentConstraint = null;
+            ForeignKeyDefinition? currentFk = null;
+
+            while (await reader.ReadAsync(ct))
+            {
+                var constraintName = reader.GetString(0);
+                var colName        = reader.GetString(1);
+                var refTable       = reader.GetString(2);
+                var refColumn      = reader.GetString(3);
+                var deleteRule     = reader.GetString(4);
+                var updateRule     = reader.GetString(5);
+
+                if (constraintName != currentConstraint)
+                {
+                    currentFk = new ForeignKeyDefinition
+                    {
+                        ConstraintName = constraintName,
+                        ReferencedTable = refTable,
+                        OnDelete = deleteRule,
+                        OnUpdate = updateRule,
+                    };
+                    schema.ForeignKeys.Add(currentFk);
+                    currentConstraint = constraintName;
+                }
+
+                currentFk!.Columns.Add(colName);
+                currentFk!.ReferencedColumns.Add(refColumn);
+            }
+        }
+
         return schema;
     }
 

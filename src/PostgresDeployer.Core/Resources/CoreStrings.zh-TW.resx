@@ -78,9 +78,14 @@
   <data name="Diff_RecreatePK_Caution" xml:space="preserve"><value>注意: 重建主鍵可能影響外鍵關聯</value></data>
   <data name="Diff_CreateIndex" xml:space="preserve"><value>建立索引 "{0}"</value></data>
   <data name="Diff_RecreateIndex" xml:space="preserve"><value>重建索引 "{0}"（定義已變更）</value></data>
-  <data name="Diff_DropIndex" xml:space="preserve"><value>刪除索引 "{0}"（不在 SQL 定義檔中）</value></data>
+  <data name="Diff_DropIndex" xml:space="preserve"><value>刪除索引 "{0}"（SQL 定義檔已移除）</value></data>
   <data name="Diff_CreateView" xml:space="preserve"><value>建立新視圖 "{0}"（首次建立）</value></data>
   <data name="Diff_ReplaceView" xml:space="preserve"><value>取代視圖 "{0}"（刪除後重建）</value></data>
+  <data name="Diff_AddFK" xml:space="preserve"><value>新增外鍵 "{0}" ({1}) → "{2}"</value></data>
+  <data name="Diff_DropFK" xml:space="preserve"><value>刪除外鍵 "{0}"（SQL 定義檔已移除）</value></data>
+  <data name="Diff_DropFK_Caution" xml:space="preserve"><value>警告：刪除外鍵 "{0}" 將移除參照完整性約束</value></data>
+  <data name="Diff_RecreateFK" xml:space="preserve"><value>重建外鍵 "{0}"（定義已變更）</value></data>
+  <data name="Diff_RecreateFK_Caution" xml:space="preserve"><value>警告：重建外鍵會暫時移除參照完整性 — 部署前請確認資料一致性</value></data>
 
   <!-- DeployExecutor -->
   <data name="Deploy_Cancelled" xml:space="preserve"><value>部署已被使用者取消</value></data>

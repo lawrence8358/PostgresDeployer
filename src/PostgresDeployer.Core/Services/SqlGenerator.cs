@@ -78,4 +78,24 @@ public class SqlGenerator : ISqlGenerator
         var constraintName = pk.ConstraintName ?? $"PK_{tableName}";
         return $"ALTER TABLE \"{tableName}\" ADD CONSTRAINT \"{constraintName}\" PRIMARY KEY ({cols});";
     }
+
+    public string GenerateAddForeignKey(string tableName, ForeignKeyDefinition fk)
+    {
+        var cols    = string.Join(", ", fk.Columns.Select(c => $"\"{c}\""));
+        var refCols = string.Join(", ", fk.ReferencedColumns.Select(c => $"\"{c}\""));
+        var sb = new StringBuilder();
+        sb.Append($"ALTER TABLE \"{tableName}\" ADD CONSTRAINT \"{fk.ConstraintName}\" ");
+        sb.Append($"FOREIGN KEY ({cols}) REFERENCES \"{fk.ReferencedTable}\" ({refCols})");
+        var onDelete = (fk.OnDelete ?? "NO ACTION").ToUpperInvariant().Trim();
+        var onUpdate = (fk.OnUpdate ?? "NO ACTION").ToUpperInvariant().Trim();
+        if (onDelete != "NO ACTION") sb.Append($" ON DELETE {onDelete}");
+        if (onUpdate != "NO ACTION") sb.Append($" ON UPDATE {onUpdate}");
+        sb.Append(';');
+        return sb.ToString();
+    }
+
+    public string GenerateDropForeignKey(string tableName, string constraintName)
+    {
+        return $"ALTER TABLE \"{tableName}\" DROP CONSTRAINT \"{constraintName}\";";
+    }
 }

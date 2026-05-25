@@ -21,6 +21,9 @@ public class TableSchema
     /// <summary>索引定義清單（不含主鍵索引）</summary>
     public List<IndexDefinition> Indexes { get; set; } = [];
 
+    /// <summary>外鍵約束定義清單</summary>
+    public List<ForeignKeyDefinition> ForeignKeys { get; set; } = [];
+
     /// <summary>
     /// 原始 SQL 檔案完整內容。
     /// 用於 CREATE TABLE 時直接執行原始 SQL（新建表不需重新產生）。

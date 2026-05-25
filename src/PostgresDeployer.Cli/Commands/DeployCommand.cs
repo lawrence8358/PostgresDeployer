@@ -199,6 +199,9 @@ public static class DeployCommand
                         ChangeType.DropIndex => "[-IDX]  ",
                         ChangeType.DropColumn => "[-COL]  ",
                         ChangeType.RecreatePrimaryKey => "[~PK]   ",
+                        ChangeType.CreateForeignKey => "[+FK]   ",
+                        ChangeType.DropForeignKey => "[-FK]   ",
+                        ChangeType.RecreateForeignKey => "[~FK]   ",
                         _ => "[?]     "
                     };
                     Console.WriteLine($"    {prefix} {change.Description}");

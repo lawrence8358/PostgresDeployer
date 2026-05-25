@@ -81,6 +81,11 @@
   <data name="Diff_DropIndex" xml:space="preserve"><value>Drop index "{0}" (not in SQL definition)</value></data>
   <data name="Diff_CreateView" xml:space="preserve"><value>Create view "{0}" (new)</value></data>
   <data name="Diff_ReplaceView" xml:space="preserve"><value>Replace view "{0}" (drop and recreate)</value></data>
+  <data name="Diff_AddFK" xml:space="preserve"><value>Add foreign key "{0}" ({1}) → "{2}"</value></data>
+  <data name="Diff_DropFK" xml:space="preserve"><value>Drop foreign key "{0}" (not in SQL definition)</value></data>
+  <data name="Diff_DropFK_Caution" xml:space="preserve"><value>Warning: dropping foreign key "{0}" will remove referential integrity constraint</value></data>
+  <data name="Diff_RecreateFK" xml:space="preserve"><value>Recreate foreign key "{0}" (definition changed)</value></data>
+  <data name="Diff_RecreateFK_Caution" xml:space="preserve"><value>Warning: recreating foreign key temporarily removes referential integrity — ensure data is consistent before deploying</value></data>
 
   <!-- DeployExecutor: user-visible messages -->
   <data name="Deploy_Cancelled" xml:space="preserve"><value>Deployment cancelled by user</value></data>

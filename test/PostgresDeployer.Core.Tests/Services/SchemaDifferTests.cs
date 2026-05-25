@@ -420,4 +420,102 @@ public class SchemaDifferTests
     }
 
     #endregion
+
+    #region ComputeChanges_ForeignKey
+
+    private static ForeignKeyDefinition Fk(
+        string constraintName, string column, string refTable, string refColumn,
+        string onDelete = "NO ACTION", string onUpdate = "NO ACTION")
+    {
+        return new ForeignKeyDefinition
+        {
+            ConstraintName = constraintName,
+            Columns = [column],
+            ReferencedTable = refTable,
+            ReferencedColumns = [refColumn],
+            OnDelete = onDelete,
+            OnUpdate = onUpdate,
+        };
+    }
+
+    [Fact]
+    public void ComputeChanges_NewForeignKey_ReturnsCreateForeignKey()
+    {
+        var desiredTable = CreateTable("MenuGroup",
+            Col("Code", "VARCHAR", "VARCHAR(50)", nullable: false),
+            Col("ParentGroupCode", "VARCHAR", "VARCHAR(50)"));
+        desiredTable.ForeignKeys.Add(
+            Fk("FK_MenuGroup_ParentGroupCode", "ParentGroupCode", "MenuGroup", "Code"));
+
+        var actualTable = CreateTable("MenuGroup",
+            Col("Code", "VARCHAR", "VARCHAR(50)", nullable: false),
+            Col("ParentGroupCode", "VARCHAR", "VARCHAR(50)"));
+        // No FKs in actual
+
+        var changes = _differ.ComputeChanges([desiredTable], new Dictionary<string, TableSchema> { ["MenuGroup"] = actualTable });
+
+        var fkChange = changes.FirstOrDefault(c => c.Type == ChangeType.CreateForeignKey);
+        Assert.NotNull(fkChange);
+        Assert.Equal("MenuGroup", fkChange!.EntityName);
+        Assert.Equal("FK_MenuGroup_ParentGroupCode", fkChange.ColumnName);
+    }
+
+    [Fact]
+    public void ComputeChanges_UnchangedForeignKey_ReturnsEmpty()
+    {
+        var fk = Fk("FK_A", "ParentId", "Parent", "Id");
+
+        var desiredTable = CreateTable("Child", Col("Id", "INT", "INT", nullable: false), Col("ParentId", "INT", "INT"));
+        desiredTable.ForeignKeys.Add(fk);
+
+        var actualTable = CreateTable("Child", Col("Id", "INT", "INT", nullable: false), Col("ParentId", "INT", "INT"));
+        actualTable.ForeignKeys.Add(Fk("FK_A", "ParentId", "Parent", "Id"));
+
+        var changes = _differ.ComputeChanges([desiredTable], new Dictionary<string, TableSchema> { ["Child"] = actualTable });
+
+        Assert.DoesNotContain(changes, c =>
+            c.Type == ChangeType.CreateForeignKey ||
+            c.Type == ChangeType.DropForeignKey ||
+            c.Type == ChangeType.RecreateForeignKey);
+    }
+
+    [Fact]
+    public void ComputeChanges_ForeignKeyDropped_ReturnsDropForeignKeyWithCaution()
+    {
+        var desiredTable = CreateTable("Child",
+            Col("Id", "INT", "INT", nullable: false), Col("ParentId", "INT", "INT"));
+        // No FK in desired
+
+        var actualTable = CreateTable("Child",
+            Col("Id", "INT", "INT", nullable: false), Col("ParentId", "INT", "INT"));
+        actualTable.ForeignKeys.Add(Fk("FK_Child_Parent", "ParentId", "Parent", "Id"));
+
+        var changes = _differ.ComputeChanges([desiredTable], new Dictionary<string, TableSchema> { ["Child"] = actualTable });
+
+        var dropFk = changes.FirstOrDefault(c => c.Type == ChangeType.DropForeignKey);
+        Assert.NotNull(dropFk);
+        Assert.Equal("FK_Child_Parent", dropFk!.ColumnName);
+        Assert.NotNull(dropFk.CautionMessage);
+    }
+
+    [Fact]
+    public void ComputeChanges_ForeignKeyDefinitionChanged_ReturnsRecreateForeignKey()
+    {
+        var desiredTable = CreateTable("Child",
+            Col("Id", "INT", "INT", nullable: false), Col("ParentId", "INT", "INT"));
+        desiredTable.ForeignKeys.Add(Fk("FK_A", "ParentId", "Parent", "Id", onDelete: "CASCADE"));
+
+        var actualTable = CreateTable("Child",
+            Col("Id", "INT", "INT", nullable: false), Col("ParentId", "INT", "INT"));
+        actualTable.ForeignKeys.Add(Fk("FK_A", "ParentId", "Parent", "Id", onDelete: "NO ACTION"));
+
+        var changes = _differ.ComputeChanges([desiredTable], new Dictionary<string, TableSchema> { ["Child"] = actualTable });
+
+        var recreateFk = changes.FirstOrDefault(c => c.Type == ChangeType.RecreateForeignKey);
+        Assert.NotNull(recreateFk);
+        Assert.Equal("FK_A", recreateFk!.ColumnName);
+        Assert.NotNull(recreateFk.CautionMessage);
+    }
+
+    #endregion
 }

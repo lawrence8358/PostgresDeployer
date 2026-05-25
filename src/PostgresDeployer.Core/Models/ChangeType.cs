@@ -40,4 +40,13 @@ public enum ChangeType
 
     /// <summary>取代視圖（先 DROP IF EXISTS CASCADE，再重建，因 View 定義已變更）</summary>
     ReplaceView,
+
+    /// <summary>新增外鍵約束（ALTER TABLE ADD CONSTRAINT FOREIGN KEY）</summary>
+    CreateForeignKey,
+
+    /// <summary>刪除外鍵約束（DB 有但 SQL 定義檔沒有，ALTER TABLE DROP CONSTRAINT）</summary>
+    DropForeignKey,
+
+    /// <summary>重建外鍵約束（定義已變更，DROP + ADD CONSTRAINT）</summary>
+    RecreateForeignKey,
 }

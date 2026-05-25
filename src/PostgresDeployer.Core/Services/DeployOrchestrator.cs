@@ -336,6 +336,43 @@ public class DeployOrchestrator : IDeployOrchestrator
                     break;
                 }
 
+                case ChangeType.CreateForeignKey:
+                {
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
+                        break;
+                    var fk = table.ForeignKeys.FirstOrDefault(f => f.ConstraintName == change.ColumnName);
+                    if (fk != null)
+                    {
+                        change.Sql = generator.GenerateAddForeignKey(change.EntityName, fk);
+                        alterGroup.Statements.Add(change.Sql);
+                        alterGroup.Changes.Add(change);
+                    }
+                    break;
+                }
+
+                case ChangeType.DropForeignKey:
+                    change.Sql = generator.GenerateDropForeignKey(change.EntityName, change.ColumnName!);
+                    alterGroup.Statements.Add(change.Sql);
+                    alterGroup.Changes.Add(change);
+                    break;
+
+                case ChangeType.RecreateForeignKey:
+                {
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
+                        break;
+                    var fk = table.ForeignKeys.FirstOrDefault(f => f.ConstraintName == change.ColumnName);
+                    if (fk != null)
+                    {
+                        alterGroup.Statements.Add(
+                            generator.GenerateDropForeignKey(change.EntityName, change.ColumnName!));
+                        var addSql = generator.GenerateAddForeignKey(change.EntityName, fk);
+                        alterGroup.Statements.Add(addSql);
+                        change.Sql = addSql;
+                        alterGroup.Changes.Add(change);
+                    }
+                    break;
+                }
+
                 default:
                     _logger.LogWarning("Unhandled change type: {Type}, table: {Table}",
                         change.Type, change.EntityName);

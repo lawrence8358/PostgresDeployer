@@ -34,4 +34,10 @@ public interface ISqlGenerator
 
     /// <summary>產生 ALTER TABLE ADD CONSTRAINT PRIMARY KEY 語句</summary>
     string GenerateCreatePrimaryKey(string tableName, PrimaryKeyDefinition pk);
+
+    /// <summary>產生 ALTER TABLE ADD CONSTRAINT FOREIGN KEY 語句</summary>
+    string GenerateAddForeignKey(string tableName, ForeignKeyDefinition fk);
+
+    /// <summary>產生 ALTER TABLE DROP CONSTRAINT（外鍵）語句</summary>
+    string GenerateDropForeignKey(string tableName, string constraintName);
 }

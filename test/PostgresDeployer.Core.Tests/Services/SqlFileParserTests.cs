@@ -312,4 +312,67 @@ public class SqlFileParserTests
         Assert.NotNull(schema.RawSql);
         Assert.Contains("CREATE TABLE", schema.RawSql);
     }
+
+    // ═══ FOREIGN KEY 解析測試 ═══
+
+    [Fact]
+    public void ParseTableSql_ForeignKeyConstraint_ParsedCorrectly()
+    {
+        const string sql = """
+            CREATE TABLE "MenuGroup" (
+                "Code" VARCHAR(50) NOT NULL,
+                "ParentGroupCode" VARCHAR(50) NULL,
+                CONSTRAINT "PK_MenuGroup" PRIMARY KEY ("Code"),
+                CONSTRAINT "FK_MenuGroup_ParentGroupCode" FOREIGN KEY ("ParentGroupCode") REFERENCES "MenuGroup"("Code")
+            );
+            """;
+
+        var schema = _parser.ParseTableSql(sql);
+
+        Assert.Single(schema.ForeignKeys);
+        var fk = schema.ForeignKeys[0];
+        Assert.Equal("FK_MenuGroup_ParentGroupCode", fk.ConstraintName);
+        Assert.Equal(["ParentGroupCode"], fk.Columns);
+        Assert.Equal("MenuGroup", fk.ReferencedTable);
+        Assert.Equal(["Code"], fk.ReferencedColumns);
+        Assert.Equal("NO ACTION", fk.OnDelete);
+        Assert.Equal("NO ACTION", fk.OnUpdate);
+    }
+
+    [Fact]
+    public void ParseTableSql_ForeignKeyWithCascade_ParsedCorrectly()
+    {
+        const string sql = """
+            CREATE TABLE "Order" (
+                "Id" UUID NOT NULL,
+                "UserId" UUID NOT NULL,
+                CONSTRAINT "PK_Order" PRIMARY KEY ("Id"),
+                CONSTRAINT "FK_Order_UserId" FOREIGN KEY ("UserId") REFERENCES "User"("Id") ON DELETE CASCADE ON UPDATE NO ACTION
+            );
+            """;
+
+        var schema = _parser.ParseTableSql(sql);
+
+        Assert.Single(schema.ForeignKeys);
+        var fk = schema.ForeignKeys[0];
+        Assert.Equal("FK_Order_UserId", fk.ConstraintName);
+        Assert.Equal("User", fk.ReferencedTable);
+        Assert.Equal("CASCADE", fk.OnDelete);
+        Assert.Equal("NO ACTION", fk.OnUpdate);
+    }
+
+    [Fact]
+    public void ParseTableSql_NoForeignKeys_ForeignKeysEmpty()
+    {
+        const string sql = """
+            CREATE TABLE "Simple" (
+                "Id" UUID NOT NULL,
+                CONSTRAINT "PK_Simple" PRIMARY KEY ("Id")
+            );
+            """;
+
+        var schema = _parser.ParseTableSql(sql);
+
+        Assert.Empty(schema.ForeignKeys);
+    }
 }

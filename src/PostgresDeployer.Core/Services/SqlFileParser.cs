@@ -39,6 +39,13 @@ public class SqlFileParser : ISqlFileParser
     private static readonly Regex DefaultPattern = new(
         @"\bDEFAULT\s+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex ForeignKeyKeywordPattern = new(
+        @"\bFOREIGN\s+KEY\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex FkConstraintPattern = new(
+        @"CONSTRAINT\s+""([^""]+)""\s+FOREIGN\s+KEY\s*\(([^)]+)\)\s+REFERENCES\s+""([^""]+)""\s*\(([^)]+)\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION))?(?:\s+ON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION))?",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public TableSchema ParseTableFile(string filePath)
     {
         var content = File.ReadAllText(filePath);
@@ -102,7 +109,10 @@ public class SqlFileParser : ISqlFileParser
             if (trimmedLine.StartsWith("CONSTRAINT", StringComparison.OrdinalIgnoreCase)
                 || trimmedLine.StartsWith("PRIMARY", StringComparison.OrdinalIgnoreCase))
             {
-                ParsePrimaryKeyConstraint(trimmedLine, schema);
+                if (ForeignKeyKeywordPattern.IsMatch(trimmedLine))
+                    ParseForeignKeyConstraint(trimmedLine, schema);
+                else
+                    ParsePrimaryKeyConstraint(trimmedLine, schema);
             }
             else if (trimmedLine.StartsWith("\""))
             {
@@ -399,6 +409,46 @@ public class SqlFileParser : ISqlFileParser
         }
 
         return minIndex;
+    }
+
+    /// <summary>
+    /// 解析 FOREIGN KEY 約束行，加入 schema.ForeignKeys。
+    /// </summary>
+    private static void ParseForeignKeyConstraint(string line, TableSchema schema)
+    {
+        var match = FkConstraintPattern.Match(line);
+        if (!match.Success) return;
+
+        var constraintName = match.Groups[1].Value;
+        var columns = ParseQuotedColumnNames(match.Groups[2].Value);
+        var referencedTable = match.Groups[3].Value;
+        var referencedColumns = ParseQuotedColumnNames(match.Groups[4].Value);
+
+        // 正規化 "SET NULL" / "SET DEFAULT"（去除多餘空白）
+        static string NormalizeAction(string? s) =>
+            string.IsNullOrEmpty(s) ? "NO ACTION"
+            : System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").ToUpperInvariant().Trim();
+
+        schema.ForeignKeys.Add(new ForeignKeyDefinition
+        {
+            ConstraintName = constraintName,
+            Columns = columns,
+            ReferencedTable = referencedTable,
+            ReferencedColumns = referencedColumns,
+            OnDelete = NormalizeAction(match.Groups[5].Success ? match.Groups[5].Value : null),
+            OnUpdate = NormalizeAction(match.Groups[6].Success ? match.Groups[6].Value : null),
+        });
+    }
+
+    /// <summary>
+    /// 從 SQL 識別項清單（如 "col1", "col2"）擷取不含引號的名稱清單。
+    /// </summary>
+    private static List<string> ParseQuotedColumnNames(string namesText)
+    {
+        return Regex.Matches(namesText, @"""([^""]+)""")
+            .Cast<Match>()
+            .Select(m => m.Groups[1].Value)
+            .ToList();
     }
 
     /// <summary>

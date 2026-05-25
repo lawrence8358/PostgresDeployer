@@ -37,6 +37,7 @@ public class SchemaDiffer : ISchemaDiffer
             CompareColumns(desiredTable, actualTable, changes);
             ComparePrimaryKey(desiredTable, actualTable, changes);
             CompareIndexes(desiredTable, actualTable, changes);
+            CompareForeignKeys(desiredTable, actualTable, changes);
         }
 
         return changes;
@@ -243,6 +244,72 @@ public class SchemaDiffer : ISchemaDiffer
             if (a.Columns[i].Name != b.Columns[i].Name) return false;
             if (a.Columns[i].IsDescending != b.Columns[i].IsDescending) return false;
         }
+        return true;
+    }
+
+    private void CompareForeignKeys(TableSchema desired, TableSchema actual, List<SchemaChange> changes)
+    {
+        var actualFks = actual.ForeignKeys.ToDictionary(fk => fk.ConstraintName, StringComparer.Ordinal);
+
+        foreach (var desiredFk in desired.ForeignKeys)
+        {
+            if (!actualFks.TryGetValue(desiredFk.ConstraintName, out var actualFk))
+            {
+                changes.Add(new SchemaChange
+                {
+                    Type = ChangeType.CreateForeignKey,
+                    EntityName = desired.TableName,
+                    ColumnName = desiredFk.ConstraintName,
+                    Description = CoreStrings.Format("Diff_AddFK",
+                        desiredFk.ConstraintName,
+                        string.Join(", ", desiredFk.Columns),
+                        desiredFk.ReferencedTable)
+                });
+            }
+            else if (!ForeignKeysMatch(desiredFk, actualFk))
+            {
+                changes.Add(new SchemaChange
+                {
+                    Type = ChangeType.RecreateForeignKey,
+                    EntityName = desired.TableName,
+                    ColumnName = desiredFk.ConstraintName,
+                    Description = CoreStrings.Format("Diff_RecreateFK", desiredFk.ConstraintName),
+                    CautionMessage = CoreStrings.Get("Diff_RecreateFK_Caution")
+                });
+            }
+        }
+
+        var desiredFkNames = desired.ForeignKeys.Select(fk => fk.ConstraintName).ToHashSet(StringComparer.Ordinal);
+        foreach (var actualFk in actual.ForeignKeys)
+        {
+            if (!desiredFkNames.Contains(actualFk.ConstraintName))
+            {
+                changes.Add(new SchemaChange
+                {
+                    Type = ChangeType.DropForeignKey,
+                    EntityName = desired.TableName,
+                    ColumnName = actualFk.ConstraintName,
+                    Description = CoreStrings.Format("Diff_DropFK", actualFk.ConstraintName),
+                    CautionMessage = CoreStrings.Format("Diff_DropFK_Caution", actualFk.ConstraintName)
+                });
+            }
+        }
+    }
+
+    private static bool ForeignKeysMatch(ForeignKeyDefinition a, ForeignKeyDefinition b)
+    {
+        if (!string.Equals(a.ReferencedTable, b.ReferencedTable, StringComparison.Ordinal)) return false;
+        if (a.Columns.Count != b.Columns.Count) return false;
+        if (a.ReferencedColumns.Count != b.ReferencedColumns.Count) return false;
+        for (int i = 0; i < a.Columns.Count; i++)
+        {
+            if (!string.Equals(a.Columns[i], b.Columns[i], StringComparison.Ordinal)) return false;
+            if (!string.Equals(a.ReferencedColumns[i], b.ReferencedColumns[i], StringComparison.Ordinal)) return false;
+        }
+        static string Norm(string? s) =>
+            string.IsNullOrEmpty(s) ? "NO ACTION" : s.ToUpperInvariant().Trim();
+        if (Norm(a.OnDelete) != Norm(b.OnDelete)) return false;
+        if (Norm(a.OnUpdate) != Norm(b.OnUpdate)) return false;
         return true;
     }
 

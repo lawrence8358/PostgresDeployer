@@ -368,9 +368,9 @@ public class SchemaDifferTests
     }
 
     [Fact]
-    public void ComputeViewChanges_SelectStar_SkipsComparison()
+    public void ComputeViewChanges_SelectStar_ExistingView_ReturnsReplaceView()
     {
-        // SELECT * 無法解析欄位 → 跳過（不加入 changes）
+        // SELECT * 無法解析欄位，保守地以 ReplaceView 處理（先 DROP 再 CREATE OR REPLACE），避免 42P16
         const string sql = "CREATE OR REPLACE VIEW \"vw_Star\" AS SELECT * FROM \"T\";";
         var desired = new List<(string ViewName, string SqlContent)> { ("vw_Star", sql) };
         var existingCols = new Dictionary<string, List<string>>
@@ -380,7 +380,44 @@ public class SchemaDifferTests
 
         var changes = _differ.ComputeViewChanges(desired, existingCols);
 
-        Assert.Empty(changes); // SELECT * 無法比對，靜默跳過
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
+        Assert.Equal("vw_Star", changes[0].EntityName);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_SelectStar_NewView_ReturnsCreateView()
+    {
+        // SELECT * 且 View 不存在於 DB → 建立（不受無法解析影響）
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Star\" AS SELECT * FROM \"T\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Star", sql) };
+        var existingCols = new Dictionary<string, List<string>>(); // View 不存在
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.CreateView, changes[0].Type);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_UnquotedSchemaPrefix_ColumnAdded_ReturnsReplaceView()
+    {
+        // public."vw_Name" (unquoted schema) — reproduces 42P16 scenario
+        const string sql = """
+            CREATE OR REPLACE VIEW public."vw_Test" AS
+            SELECT p."GroupCodeId", p."CreatedBy" FROM public."T" p;
+            """;
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["CreatedBy"]   // DB has old column set (before GroupCodeId was added)
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
+        Assert.Equal("vw_Test", changes[0].EntityName);
     }
 
     [Fact]
@@ -404,6 +441,14 @@ public class SchemaDifferTests
     [InlineData(
         "CREATE OR REPLACE VIEW \"vw\" AS SELECT \"Id\";",
         new[] { "Id" })]
+    // unquoted schema prefix: public."vw_name"
+    [InlineData(
+        "CREATE OR REPLACE VIEW public.\"vw\" AS SELECT p.\"Id\", p.\"Name\" FROM public.\"T\" p;",
+        new[] { "Id", "Name" })]
+    // quoted schema prefix: "public"."vw_name"
+    [InlineData(
+        "CREATE OR REPLACE VIEW \"public\".\"vw\" AS SELECT p.\"Id\", p.\"Code\" FROM \"T\" p;",
+        new[] { "Id", "Code" })]
     public void ExtractDesiredColumnNames_CommonPatterns_ReturnsNames(string sql, string[] expected)
     {
         var result = SchemaDiffer.ExtractDesiredColumnNames(sql);

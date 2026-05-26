@@ -337,9 +337,20 @@ public class SchemaDiffer : ISchemaDiffer
                 // View 已存在：比對欄位名稱清單
                 var desiredCols = ExtractDesiredColumnNames(sqlContent);
 
-                // 若無法解析欄位（如 SELECT *），跳過（不標記為變更）
+                // 若無法解析欄位（如 SELECT *），無法確認欄位是否相同，
+                // 保守地標記為 ReplaceView（先 DROP 再 CREATE OR REPLACE），
+                // 避免 PostgreSQL 42P16：cannot change name of view column
                 if (desiredCols == null)
+                {
+                    changes.Add(new SchemaChange
+                    {
+                        Type = ChangeType.ReplaceView,
+                        EntityName = viewName,
+                        Description = CoreStrings.Format("Diff_ReplaceView", viewName),
+                        Sql = sqlContent
+                    });
                     continue;
+                }
 
                 bool columnsChanged =
                     desiredCols.Count != existingCols.Count ||
@@ -366,7 +377,7 @@ public class SchemaDiffer : ISchemaDiffer
     // ── View 欄位解析輔助 ──────────────────────────────────────────────────
 
     private static readonly Regex CreateViewPrefixRegex = new(
-        @"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:""[^""]*""\s*\.\s*)?""[^""]*""\s+AS\s+",
+        @"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:(?:""[^""]*""|\w+)\s*\.\s*)?""[^""]*""\s+AS\s+",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
     private static readonly Regex AsAliasQuotedRegex =

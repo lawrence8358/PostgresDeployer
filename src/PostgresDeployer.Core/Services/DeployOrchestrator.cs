@@ -488,7 +488,7 @@ public class DeployOrchestrator : IDeployOrchestrator
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ViewNameRegex = new(
-        @"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:""[^""]*""\s*\.\s*)?""([^""]+)""",
+        @"CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:(?:""[^""]*""|\w+)\s*\.\s*)?""([^""]+)""",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>

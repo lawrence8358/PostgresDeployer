@@ -50,8 +50,8 @@
                 </Border>
 
                 <!-- 底部版本資訊（須宣告在填滿剩餘空間的元素之前） -->
-                <TextBlock DockPanel.Dock="Bottom"
-                           Text="v1.3.1"
+                <TextBlock x:Name="VersionTextBlock"
+                           DockPanel.Dock="Bottom"
                            FontSize="10"
                            Foreground="{DynamicResource SecondaryTextBrush}"
                            HorizontalAlignment="Center"

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using PostgresDeployer.Wpf.Services;
@@ -13,6 +14,9 @@ public partial class MainWindow : HandyControl.Controls.Window
     {
         InitializeComponent();
         DataContext = viewModel;
+
+        var version = Assembly.GetExecutingAssembly().GetName().Version;
+        VersionTextBlock.Text = version is null ? "" : $"v{version.ToString(3)}";
 
         // 預設顯示設定頁
         MainContent.Content = MainContent.Resources["SettingsPage"];

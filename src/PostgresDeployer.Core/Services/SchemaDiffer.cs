@@ -412,6 +412,14 @@ public class SchemaDiffer : ISchemaDiffer
         var body = sqlContent[(m.Index + m.Length)..].Trim().TrimEnd(';').Trim();
         if (string.IsNullOrWhiteSpace(body)) return null;
 
+        // 跳過 AS 後的 SQL 單行注釋（-- ...）
+        while (body.StartsWith("--"))
+        {
+            int nl = body.IndexOf('\n');
+            body = nl < 0 ? "" : body[(nl + 1)..].TrimStart();
+        }
+        if (string.IsNullOrWhiteSpace(body)) return null;
+
         // 去掉 SELECT 關鍵字
         if (!body.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
             return null;
@@ -440,14 +448,18 @@ public class SchemaDiffer : ISchemaDiffer
         return names;
     }
 
-    /// <summary>提取 SELECT 清單（FROM 關鍵字之前的部分），正確跳過字串字面量</summary>
+    /// <summary>提取 SELECT 清單（FROM 關鍵字之前的部分），正確跳過字串字面量與 double-quoted 識別符</summary>
     private static string? ExtractSelectList(string body)
     {
         int depth = 0;
         bool inStr = false;
+        bool inIdent = false;
         for (int i = 0; i < body.Length; i++)
         {
             char c = body[i];
+            // 跳過 double-quoted 識別符（如 "FromName"），避免識別符內的關鍵字被誤判
+            if (c == '"' && !inStr) { inIdent = !inIdent; continue; }
+            if (inIdent) continue;
             if (c == '\'' && !inStr) { inStr = true; continue; }
             if (c == '\'' && inStr)
             {

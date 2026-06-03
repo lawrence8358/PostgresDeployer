@@ -56,4 +56,7 @@ public class ColumnDefinition
     /// 對應 PostgreSQL 的自動遞增欄位。
     /// </summary>
     public bool IsIdentity { get; set; } = false;
+
+    /// <summary>欄位註解。null 表示未指定或應移除註解。</summary>
+    public string? Comment { get; set; }
 }

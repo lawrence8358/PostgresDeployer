@@ -37,6 +37,13 @@ public class SchemaDifferTests
         };
     }
 
+    private static TableSchema CreateTableWithComment(string name, string? comment, params ColumnDefinition[] columns)
+    {
+        var table = CreateTable(name, columns);
+        table.Comment = comment;
+        return table;
+    }
+
     [Fact]
     public void ComputeChanges_NewTable_ReturnsCreateTable()
     {
@@ -135,6 +142,43 @@ public class SchemaDifferTests
         var changes = _differ.ComputeChanges(desired, actual);
 
         Assert.Contains(changes, c => c.Type == ChangeType.AlterColumnDefault && c.ColumnName == "Active");
+    }
+
+    [Fact]
+    public void ComputeChanges_TableCommentChanged_ReturnsAlterTableComment()
+    {
+        var desired = new List<TableSchema>
+        {
+            CreateTableWithComment("Users", "使用者資料表",
+                Col("Id", "UUID", "UUID", nullable: false))
+        };
+        var actual = new Dictionary<string, TableSchema>
+        {
+            ["Users"] = CreateTableWithComment("Users", "舊註解",
+                Col("Id", "UUID", "UUID", nullable: false))
+        };
+
+        var changes = _differ.ComputeChanges(desired, actual);
+
+        Assert.Contains(changes, c => c.Type == ChangeType.AlterTableComment && c.EntityName == "Users");
+    }
+
+    [Fact]
+    public void ComputeChanges_ColumnCommentChanged_ReturnsAlterColumnComment()
+    {
+        var desiredTable = CreateTable("Users",
+            Col("Id", "UUID", "UUID", nullable: false),
+            Col("Name", "VARCHAR", "VARCHAR(200)", length: 200));
+        desiredTable.Columns.First(c => c.Name == "Name").Comment = "姓名";
+
+        var actualTable = CreateTable("Users",
+            Col("Id", "UUID", "UUID", nullable: false),
+            Col("Name", "VARCHAR", "VARCHAR(200)", length: 200));
+        actualTable.Columns.First(c => c.Name == "Name").Comment = "舊姓名";
+
+        var changes = _differ.ComputeChanges([desiredTable], new Dictionary<string, TableSchema> { ["Users"] = actualTable });
+
+        Assert.Contains(changes, c => c.Type == ChangeType.AlterColumnComment && c.ColumnName == "Name");
     }
 
     [Fact]

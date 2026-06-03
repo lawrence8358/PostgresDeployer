@@ -214,6 +214,11 @@ public class DeployOrchestrator : IDeployOrchestrator
                             $"Column not found in table {change.EntityName}: {change.ColumnName}");
                     change.Sql = generator.GenerateAddColumn(change.EntityName, col);
                     alterGroup.Statements.Add(change.Sql);
+                    if (col.Comment != null)
+                    {
+                        alterGroup.Statements.Add(
+                            generator.GenerateAlterColumnComment(change.EntityName, change.ColumnName!, col.Comment));
+                    }
                     alterGroup.Changes.Add(change);
                     break;
                 }
@@ -259,6 +264,29 @@ public class DeployOrchestrator : IDeployOrchestrator
                     var defValue = col.HasDefault ? col.DefaultValue : null;
                     change.Sql = generator.GenerateAlterColumnDefault(
                         change.EntityName, change.ColumnName!, defValue);
+                    alterGroup.Statements.Add(change.Sql);
+                    alterGroup.Changes.Add(change);
+                    break;
+                }
+
+                case ChangeType.AlterTableComment:
+                    change.Sql = generator.GenerateAlterTableComment(
+                        change.EntityName,
+                        tableMap[change.EntityName].Comment);
+                    alterGroup.Statements.Add(change.Sql);
+                    alterGroup.Changes.Add(change);
+                    break;
+
+                case ChangeType.AlterColumnComment:
+                {
+                    if (!tableMap.TryGetValue(change.EntityName, out var table))
+                        throw new InvalidOperationException(
+                            $"Diff produced a change for non-existent table: {change.EntityName}");
+                    var col = table.Columns.FirstOrDefault(c => c.Name == change.ColumnName)
+                        ?? throw new InvalidOperationException(
+                            $"Column not found in table {change.EntityName}: {change.ColumnName}");
+                    change.Sql = generator.GenerateAlterColumnComment(
+                        change.EntityName, change.ColumnName!, col.Comment);
                     alterGroup.Statements.Add(change.Sql);
                     alterGroup.Changes.Add(change);
                     break;

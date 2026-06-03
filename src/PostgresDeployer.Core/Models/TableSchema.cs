@@ -9,6 +9,9 @@ public class TableSchema
     /// <summary>資料表名稱（不含引號），如 "Base_Auth_User"</summary>
     public string TableName { get; set; } = "";
 
+    /// <summary>資料表註解。null 表示未指定或應移除註解。</summary>
+    public string? Comment { get; set; }
+
     /// <summary>CREATE TABLE 是否使用了 IF NOT EXISTS 語法</summary>
     public bool IfNotExists { get; set; } = false;
 

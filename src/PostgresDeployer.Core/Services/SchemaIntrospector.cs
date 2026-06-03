@@ -127,6 +127,48 @@ public class SchemaIntrospector : ISchemaIntrospector
             }
         }
 
+        const string commentSql = """
+            SELECT
+                obj_description(c.oid, 'pg_class') AS table_comment,
+                a.attname AS column_name,
+                col_description(c.oid, a.attnum) AS column_comment
+            FROM pg_class c
+            LEFT JOIN pg_attribute a
+                ON a.attrelid = c.oid
+               AND a.attnum > 0
+               AND NOT a.attisdropped
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = @tableName
+              AND c.relkind = 'r'
+            ORDER BY a.attnum
+            """;
+
+        await using (var cmd = new NpgsqlCommand(commentSql, conn))
+        {
+            cmd.Parameters.AddWithValue("@tableName", tableName);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            var columnsByName = schema.Columns.ToDictionary(c => c.Name, StringComparer.Ordinal);
+            bool tableCommentAssigned = false;
+
+            while (await reader.ReadAsync(ct))
+            {
+                if (!tableCommentAssigned)
+                {
+                    schema.Comment = reader.IsDBNull(0) ? null : reader.GetString(0);
+                    tableCommentAssigned = true;
+                }
+
+                if (reader.IsDBNull(1))
+                    continue;
+
+                var columnName = reader.GetString(1);
+                if (columnsByName.TryGetValue(columnName, out var column))
+                    column.Comment = reader.IsDBNull(2) ? null : reader.GetString(2);
+            }
+        }
+
         // ═══ 查詢主鍵 ═══
         const string pkSql = """
             SELECT

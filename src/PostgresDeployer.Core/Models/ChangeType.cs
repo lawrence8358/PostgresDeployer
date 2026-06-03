@@ -20,6 +20,12 @@ public enum ChangeType
     /// <summary>變更欄位預設值（SET/DROP DEFAULT）</summary>
     AlterColumnDefault,
 
+    /// <summary>變更資料表註解（COMMENT ON TABLE）</summary>
+    AlterTableComment,
+
+    /// <summary>變更欄位註解（COMMENT ON COLUMN）</summary>
+    AlterColumnComment,
+
     /// <summary>建立新索引（CREATE INDEX）</summary>
     CreateIndex,
 

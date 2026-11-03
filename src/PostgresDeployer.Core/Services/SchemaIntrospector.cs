@@ -425,23 +425,26 @@ public class SchemaIntrospector : ISchemaIntrospector
         await conn.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
-        var tempTables = new Dictionary<string, string>(StringComparer.Ordinal);
+        // 資料表名稱 → 暫存表名稱；null 表示該表的暫存表建立失敗（同表其餘索引直接略過）
+        var tempTables = new Dictionary<string, string?>(StringComparer.Ordinal);
         var generator = new SqlGenerator();
+        int tableSeq = 0;
         int seq = 0;
 
         foreach (var (tableName, index) in indexes)
         {
+            if (!tempTables.TryGetValue(tableName, out var tempTable))
+            {
+                // 暫存表在自己的 savepoint 中建立並 release，之後索引探測失敗時回滾到 pgd_canon 不會連帶回滾暫存表
+                tempTable = await TryCreateCanonTempTableAsync(conn, tx, tableName, $"pgd_canon_t{tableSeq++}", ct);
+                tempTables[tableName] = tempTable;
+            }
+            if (tempTable == null)
+                continue;
+
             await tx.SaveAsync("pgd_canon", ct);
             try
             {
-                if (!tempTables.TryGetValue(tableName, out var tempTable))
-                {
-                    tempTable = $"pgd_canon_t{tempTables.Count}";
-                    await ExecuteAsync(conn, tx,
-                        $"CREATE TEMP TABLE \"{tempTable}\" (LIKE public.\"{tableName.Replace("\"", "\"\"")}\")", ct);
-                    tempTables[tableName] = tempTable;
-                }
-
                 // 以 SQL 檔的定義在暫存表上建立同樣的索引，再讀回 PostgreSQL 正規化後的欄位與條件
                 var tempIndex = $"pgd_canon_i{seq++}";
                 var probe = new IndexDefinition
@@ -475,11 +478,32 @@ public class SchemaIntrospector : ISchemaIntrospector
         await tx.RollbackAsync(ct);
     }
 
-    public async Task<Dictionary<string, List<string>>> GetViewDependentsAsync(
+    /// <summary>
+    /// 以 <c>LIKE public."table"</c> 建立索引正規化用的暫存表（獨立 savepoint）；失敗時回滾該 savepoint 並回傳 null。
+    /// </summary>
+    private static async Task<string?> TryCreateCanonTempTableAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, string tableName, string tempTable, CancellationToken ct)
+    {
+        await tx.SaveAsync("pgd_canon_table", ct);
+        try
+        {
+            await ExecuteAsync(conn, tx,
+                $"CREATE TEMP TABLE \"{tempTable}\" (LIKE public.\"{tableName.Replace("\"", "\"\"")}\")", ct);
+            await tx.ReleaseAsync("pgd_canon_table", ct);
+            return tempTable;
+        }
+        catch (PostgresException)
+        {
+            await tx.RollbackAsync("pgd_canon_table", ct);
+            return null;
+        }
+    }
+
+    public async Task<Dictionary<string, List<DependentObject>>> GetViewDependentsAsync(
         IReadOnlyCollection<string> viewNames,
         CancellationToken ct = default)
     {
-        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var result = new Dictionary<string, List<DependentObject>>(StringComparer.Ordinal);
         if (viewNames.Count == 0)
             return result;
 
@@ -521,17 +545,14 @@ public class SchemaIntrospector : ISchemaIntrospector
         while (await reader.ReadAsync(ct))
         {
             var root = reader.GetString(0);
-            var schemaName = reader.GetString(1);
-            var name = reader.GetString(2);
-            var kind = reader.GetString(3) == "m" ? "materialized view" : "view";
-            var display = schemaName == "public" ? $"\"{name}\"" : $"\"{schemaName}\".\"{name}\"";
+            var kind = reader.GetString(3) == "m" ? DependentObject.KindMaterializedView : DependentObject.KindView;
 
             if (!result.TryGetValue(root, out var list))
             {
                 list = [];
                 result[root] = list;
             }
-            list.Add($"{display} ({kind})");
+            list.Add(new DependentObject(reader.GetString(1), reader.GetString(2), kind));
         }
 
         return result;

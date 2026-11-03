@@ -85,4 +85,37 @@ public class SqlTextScannerTests
 
         Assert.Null(SqlTextScanner.FindMissingTerminator(sql));
     }
+
+    [Theory]
+    [InlineData("CREATE RULE")]
+    [InlineData("CREATE OR REPLACE RULE")]
+    [InlineData("create or replace rule")]
+    public void FindMissingTerminator_RuleWithActionOnNewLine_ReturnsNull(string createRule)
+    {
+        // RULE 的動作（DO ... INSERT INTO）換行寫在行首是合法的，不是漏分號
+        var sql = $"""
+            CREATE TABLE "T"
+            (
+                "Id" INT NOT NULL
+            );
+
+            {createRule} "R_T_Log" AS ON INSERT TO "T"
+            DO ALSO
+            INSERT INTO "T_Log" ("Id") VALUES (NEW."Id");
+            """;
+
+        Assert.Null(SqlTextScanner.FindMissingTerminator(sql));
+    }
+
+    [Fact]
+    public void FindMissingTerminator_StatementAfterRuleWithoutSemicolon_StillDetected()
+    {
+        // 只略過 RULE 陳述式本身；之後的陳述式漏分號仍要偵測
+        var sql = "CREATE RULE \"R\" AS ON INSERT TO \"T\"\nDO INSTEAD NOTHING;\nCREATE INDEX \"IX\" ON \"T\" (\"Id\")\nCOMMENT ON TABLE \"T\" IS 'x';";
+
+        var result = SqlTextScanner.FindMissingTerminator(sql);
+
+        Assert.NotNull(result);
+        Assert.Equal("COMMENT ON", result!.Value.Keyword);
+    }
 }

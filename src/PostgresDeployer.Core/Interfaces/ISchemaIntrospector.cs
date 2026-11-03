@@ -40,9 +40,9 @@ public interface ISchemaIntrospector
 
     /// <summary>
     /// 取得依賴指定 View 的物件（遞迴），即 DROP VIEW ... CASCADE 會一併刪除的 View / Materialized View。
-    /// Key 為傳入的 View 名稱，Value 為相依物件的顯示名稱。
+    /// Key 為傳入的 View 名稱，Value 為相依物件（schema、名稱、種類；<c>ToString()</c> 為顯示名稱）。
     /// </summary>
-    Task<Dictionary<string, List<string>>> GetViewDependentsAsync(
+    Task<Dictionary<string, List<DependentObject>>> GetViewDependentsAsync(
         IReadOnlyCollection<string> viewNames,
         CancellationToken ct = default);
 

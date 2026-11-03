@@ -3,6 +3,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PostgresDeployer.Core.Helpers;
 using PostgresDeployer.Core.Interfaces;
 using PostgresDeployer.Core.Models;
 using PostgresDeployer.Core.Resources;
@@ -526,24 +527,26 @@ public class DeployOrchestrator : IDeployOrchestrator
     }
 
     /// <summary>
-    /// 計畫被阻擋且未放行（<see cref="DeployOptions.AllowCascadeDrop"/> = false）時拋出 <see cref="InvalidOperationException"/>。
+    /// 以「執行當下」的設定重新判斷阻擋（不只看分析時的 <see cref="DeployPlan.IsBlocked"/>）：
+    /// 計畫中有 CASCADE 會刪除 schema 目錄外物件的變更、且目前未放行（<see cref="DeployOptions.AllowCascadeDrop"/> = false）時，
+    /// 拋出 <see cref="InvalidOperationException"/>。例如 WPF 先勾選放行、分析後再取消勾選，仍會在此擋下。
     /// </summary>
     private void EnsureNotBlocked(DeploySettings settings, DeployPlan plan)
     {
-        if (!plan.IsBlocked)
-            return;
-
-        if (settings.Options.AllowCascadeDrop)
+        var blocking = CascadeDropPolicy.GetBlockingChanges(plan, settings.Options);
+        if (blocking.Count == 0)
         {
-            _logger.LogWarning(
-                "Deploy plan has {Count} blocker(s) but AllowCascadeDrop is enabled — proceeding", plan.Blockers.Count);
+            if (plan.IsBlocked)
+                _logger.LogWarning(
+                    "Deploy plan has {Count} blocker(s) but AllowCascadeDrop is enabled — proceeding", plan.Blockers.Count);
             return;
         }
 
-        var details = string.Join(Environment.NewLine, plan.Blockers.Select(b => $"  - {b.BlockerMessage}"));
-        _logger.LogError("Deployment blocked, no group executed: {Count} blocker(s)", plan.Blockers.Count);
+        var details = string.Join(Environment.NewLine,
+            blocking.Select(b => $"  - {b.BlockerMessage ?? CascadeDropPolicy.BuildBlockerMessage(b)}"));
+        _logger.LogError("Deployment blocked, no group executed: {Count} blocker(s)", blocking.Count);
         throw new InvalidOperationException(
-            CoreStrings.Format("Deploy_Blocked", plan.Blockers.Count) + Environment.NewLine + details);
+            CoreStrings.Format("Deploy_Blocked", blocking.Count) + Environment.NewLine + details);
     }
 
     /// <summary>
@@ -580,7 +583,7 @@ public class DeployOrchestrator : IDeployOrchestrator
             {
                 var actualIdx = actualTable.Indexes.FirstOrDefault(
                     i => string.Equals(i.Name, idx.Name, StringComparison.Ordinal));
-                if (actualIdx == null || SchemaDiffer.IndexesMatch(idx, actualIdx))
+                if (actualIdx == null || IndexDefinitionComparer.Matches(idx, actualIdx))
                     continue;
                 if (idx.Predicate != null || actualIdx.Predicate != null || idx.Columns.Any(c => c.IsExpression))
                     candidates.Add((table.TableName, idx));
@@ -681,9 +684,8 @@ public class DeployOrchestrator : IDeployOrchestrator
         IEnumerable<string> desiredViewNames,
         CancellationToken ct)
     {
-        var desired = desiredViewNames
-            .Select(v => $"\"{v}\" (view)")
-            .ToHashSet(StringComparer.Ordinal);
+        // schema 目錄中的 View 一律部署到 public schema：以 (schema, 名稱) 結構化比對，不依賴顯示字串格式
+        var desired = desiredViewNames.ToHashSet(StringComparer.Ordinal);
 
         var dependents = await introspector.GetViewDependentsAsync(
             replaceViewChanges.Select(c => c.EntityName).ToList(), ct);
@@ -693,7 +695,10 @@ public class DeployOrchestrator : IDeployOrchestrator
             if (!dependents.TryGetValue(change.EntityName, out var list))
                 continue;
 
-            var lost = list.Where(d => !desired.Contains(d)).ToList();
+            var lost = list
+                .Where(d => !(d.Schema == "public" && desired.Contains(d.Name)))
+                .Select(d => d.ToString())
+                .ToList();
             if (lost.Count == 0)
                 continue;
 
@@ -713,16 +718,12 @@ public class DeployOrchestrator : IDeployOrchestrator
     /// </summary>
     internal static void ApplyCascadeDropPolicy(DeployPlan plan, DeployOptions options, ILogger? logger = null)
     {
-        var cascading = plan.Cautions
-            .Concat(plan.Groups.SelectMany(g => g.Changes))
-            .Where(c => c.CascadeDropObjects is { Count: > 0 })
-            .Distinct()
-            .ToList();
-
+        var cascading = CascadeDropPolicy.FindCascadeDropChanges(plan);
         if (cascading.Count == 0)
             return;
 
-        if (options.AllowCascadeDrop)
+        var blocking = CascadeDropPolicy.GetBlockingChanges(plan, options);
+        if (blocking.Count == 0)
         {
             foreach (var change in cascading)
             {
@@ -735,11 +736,9 @@ public class DeployOrchestrator : IDeployOrchestrator
             return;
         }
 
-        foreach (var change in cascading)
+        foreach (var change in blocking)
         {
-            change.BlockerMessage = CoreStrings.Format(
-                "Diff_ReplaceView_CascadeBlocked",
-                change.EntityName, string.Join(", ", change.CascadeDropObjects!));
+            change.BlockerMessage = CascadeDropPolicy.BuildBlockerMessage(change);
             plan.Cautions.Remove(change);
             if (!plan.Blockers.Contains(change))
                 plan.Blockers.Add(change);

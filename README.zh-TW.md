@@ -386,10 +386,21 @@ WPF 應用程式提供互動式的 Schema 部署與管理介面，與指令列�
 > **Caution 操作** — 可能造成資料遺失或部署失敗的變更（刪除欄位、主鍵變更、型別縮減、在無預設值的情況下加入 NOT NULL、在既有資料表建立唯一索引）會以 `[!]` 警告標示，需明確確認後才會套用。
 >
 > **阻擋操作** — `DROP VIEW ... CASCADE` 會連帶刪除不在 schema 目錄中的相依 View 時，已不只是 Caution：整個部署會被阻擋（`[BLOCKED]`、exit code 1），除非以 `--allow-cascade-drop` / `"allowCascadeDrop": true` 明確放行，此時改以 `[!]` 注意事項顯示。詳見[部署被阻擋](#部署被阻擋cascade-會刪除-schema-目錄外的物件)。
+>
+> **索引比對** — SQL 檔中的索引寫法與 PostgreSQL 儲存的寫法不同時（例如部分索引 `WHERE` 中的 `IN (...)`、運算式索引），分析階段會在交易內於暫存表建立同樣的索引，請 PostgreSQL 正規化後再比對，結束時整個交易回滾（不留下任何物件）。`--dry-run`／`diff` 也會這麼做，因此資料庫帳號需要 `TEMP` 權限；沒有權限時改以 SQL 原文比對，該索引可能顯示為 `[~IDX]`。SQL 檔中的 `CREATE INDEX CONCURRENTLY` 會去掉 `CONCURRENTLY` 後執行（部署群組在交易內執行）。
 
 ## 開發者文件
 
 請參閱 [docs/](docs/) 目錄中的開發者指引。
+
+執行 PostgreSQL 整合測試：啟動拋棄式容器並設定 `PGD_TEST_CONNECTION`（未設定時這些測試會顯示為略過）：
+
+```bash
+docker run -d --name pgd-test-pg -e POSTGRES_PASSWORD=pgdtest -p 55432:5432 postgis/postgis:18-3.6
+PGD_TEST_CONNECTION="Host=localhost;Port=55432;Username=postgres;Password=pgdtest" dotnet test PostgresDeployer.sln
+```
+
+詳見 [docs/dev-guide-getting-started.md](docs/dev-guide-getting-started.md)。
 
 ## 授權
 

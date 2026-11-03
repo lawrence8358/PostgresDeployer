@@ -72,6 +72,15 @@ public static class DiffCommand
                 Console.WriteLine(report);
             }
 
+            // 9. 被阻擋 → 回傳 1（與 deploy --dry-run 一致：報告照常輸出，但 CD 的檢查步驟會失敗）
+            if (plan.IsBlocked)
+            {
+                await Console.Error.WriteLineAsync(
+                    $"Deployment would be BLOCKED by {plan.Blockers.Count} item(s) (exit code 1). " +
+                    "Re-run with --allow-cascade-drop or set \"allowCascadeDrop\": true in the config options to allow it.");
+                return 1;
+            }
+
             return 0;
         }
         catch (Exception ex)
@@ -119,7 +128,17 @@ public static class DiffCommand
             lines.Add("");
         }
 
-        lines.Add($"Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s)");
+        if (plan.IsBlocked)
+        {
+            lines.Add($"[BLOCKED] ({plan.Blockers.Count} item(s)) — deployment will not run");
+            foreach (var blocker in plan.Blockers)
+                lines.Add($"  [X] {blocker.BlockerMessage}");
+            lines.Add("");
+        }
+
+        lines.Add(plan.IsBlocked
+            ? $"Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s), {plan.Blockers.Count} blocker(s)"
+            : $"Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s)");
 
         if (!plan.HasChanges)
         {

@@ -90,9 +90,24 @@ public static class DeployCommand
             var plan = await orchestrator.AnalyzeAsync(settings);
 
             // 8. 顯示變更摘要
-            PrintPlanSummary(plan);
+            await PrintPlanSummaryAsync(plan);
 
-            // 9. Dry Run → 結束
+            // 9. 被阻擋 → 不執行、不寫 RunScript，回傳 1（dry-run 亦同，讓 CD 的預覽步驟也失敗）
+            if (plan.IsBlocked)
+            {
+                await Console.Error.WriteLineAsync();
+                await Console.Error.WriteLineAsync(dryRun
+                    ? "Dry run complete. Deployment is BLOCKED — a real deployment would not run (exit code 1)."
+                    : "Deployment BLOCKED. No changes applied (exit code 1).");
+                await Console.Error.WriteLineAsync(
+                    "To proceed anyway, re-run with --allow-cascade-drop or set \"allowCascadeDrop\": true in the config options.");
+                logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}] Deployment blocked: {plan.Blockers.Count} blocker(s)");
+                foreach (var blocker in plan.Blockers)
+                    logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}]   [BLOCKED] {blocker.BlockerMessage}");
+                return 1;
+            }
+
+            // 10. Dry Run → 結束
             if (dryRun)
             {
                 Console.WriteLine();
@@ -100,14 +115,14 @@ public static class DeployCommand
                 return 0;
             }
 
-            // 10. 無變更 → 結束
+            // 11. 無變更 → 結束
             if (!plan.HasChanges)
             {
                 Console.WriteLine("Schema is up to date. No changes needed.");
                 return 0;
             }
 
-            // 11. 確認
+            // 12. 確認
             if (!yes)
             {
                 Console.Write("Proceed with deployment? [y/N] ");
@@ -119,7 +134,7 @@ public static class DeployCommand
                 }
             }
 
-            // 12. 執行
+            // 13. 執行
             var deployProgress = new Progress<string>(msg =>
             {
                 Console.WriteLine($"  {msg}");
@@ -127,11 +142,11 @@ public static class DeployCommand
             });
             var results = await orchestrator.ExecuteAsync(settings, plan, deployProgress);
 
-            // 13. 顯示結果
+            // 14. 顯示結果
             Console.WriteLine();
             PrintResults(results);
 
-            // 14. 寫入 RunScript
+            // 15. 寫入 RunScript
             await WriteRunScriptAsync(plan, settings, logWriter);
 
             return results.All(r => r.Success) ? 0 : 1;
@@ -174,7 +189,7 @@ public static class DeployCommand
         }
     }
 
-    private static void PrintPlanSummary(DeployPlan plan)
+    private static async Task PrintPlanSummaryAsync(DeployPlan plan)
     {
         Console.WriteLine(Separator);
         Console.WriteLine(" Deployment Plan");
@@ -225,8 +240,21 @@ public static class DeployCommand
                 Console.WriteLine($"    [!] {caution.CautionMessage}");
         }
 
+        if (plan.IsBlocked)
+        {
+            // 阻擋訊息寫到 stderr，CD 記錄中較醒目
+            await Console.Out.FlushAsync();
+            await Console.Error.WriteLineAsync();
+            await Console.Error.WriteLineAsync($"  [BLOCKED] ({plan.Blockers.Count} item(s)) — deployment will not run");
+            foreach (var blocker in plan.Blockers)
+                await Console.Error.WriteLineAsync($"    [X] {blocker.BlockerMessage}");
+            await Console.Error.FlushAsync();
+        }
+
         Console.WriteLine();
-        Console.WriteLine($"  Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s)");
+        Console.WriteLine(plan.IsBlocked
+            ? $"  Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s), {plan.Blockers.Count} blocker(s)"
+            : $"  Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s)");
     }
 
     private static void PrintResults(List<DeployResult> results)

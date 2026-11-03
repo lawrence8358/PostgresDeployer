@@ -464,8 +464,12 @@ public class DeployOrchestrator : IDeployOrchestrator
             }
         }
 
-        _logger.LogInformation("Analysis complete: {Groups} group(s), {Statements} statement(s), {Cautions} caution(s)",
-            plan.Groups.Count, plan.TotalStatements, plan.Cautions.Count);
+        // CASCADE 會刪除 schema 目錄外物件的變更：依設定分流為阻擋項目或注意事項
+        ApplyCascadeDropPolicy(plan, settings.Options, _logger);
+
+        _logger.LogInformation(
+            "Analysis complete: {Groups} group(s), {Statements} statement(s), {Cautions} caution(s), {Blockers} blocker(s)",
+            plan.Groups.Count, plan.TotalStatements, plan.Cautions.Count, plan.Blockers.Count);
 
         return plan;
     }
@@ -476,6 +480,9 @@ public class DeployOrchestrator : IDeployOrchestrator
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
+        // 被阻擋的計畫一律拒絕執行（在連線前檢查，不執行任何群組），保護所有呼叫端
+        EnsureNotBlocked(settings, plan);
+
         var connStr = settings.Connection.ToConnectionString();
 
         var executorLogger = _loggerFactory?.CreateLogger<DeployExecutor>()
@@ -511,6 +518,27 @@ public class DeployOrchestrator : IDeployOrchestrator
             successCount, failCount);
 
         return results;
+    }
+
+    /// <summary>
+    /// 計畫被阻擋且未放行（<see cref="DeployOptions.AllowCascadeDrop"/> = false）時拋出 <see cref="InvalidOperationException"/>。
+    /// </summary>
+    private void EnsureNotBlocked(DeploySettings settings, DeployPlan plan)
+    {
+        if (!plan.IsBlocked)
+            return;
+
+        if (settings.Options.AllowCascadeDrop)
+        {
+            _logger.LogWarning(
+                "Deploy plan has {Count} blocker(s) but AllowCascadeDrop is enabled — proceeding", plan.Blockers.Count);
+            return;
+        }
+
+        var details = string.Join(Environment.NewLine, plan.Blockers.Select(b => $"  - {b.BlockerMessage}"));
+        _logger.LogError("Deployment blocked, no group executed: {Count} blocker(s)", plan.Blockers.Count);
+        throw new InvalidOperationException(
+            CoreStrings.Format("Deploy_Blocked", plan.Blockers.Count) + Environment.NewLine + details);
     }
 
     /// <summary>
@@ -569,7 +597,9 @@ public class DeployOrchestrator : IDeployOrchestrator
 
     /// <summary>
     /// Pre-Alter 的 DROP VIEW ... CASCADE 會連帶刪除依賴該 View 的物件；
-    /// 其中不在 schema 目錄中的物件部署後不會重建，需列為注意事項。
+    /// 其中不在 schema 目錄中的物件部署後不會重建。
+    /// 此方法只負責「偵測」：把這些物件記在 <see cref="SchemaChange.CascadeDropObjects"/> 並填入 CautionMessage；
+    /// 要列為阻擋項目或注意事項，由 AnalyzeAsync 結尾的 <see cref="ApplyCascadeDropPolicy"/> 依設定統一分流。
     /// </summary>
     private async Task AddCascadeDropCautionsAsync(
         SchemaIntrospector introspector,
@@ -593,12 +623,56 @@ public class DeployOrchestrator : IDeployOrchestrator
             if (lost.Count == 0)
                 continue;
 
+            change.CascadeDropObjects = lost;
             change.CautionMessage = CoreStrings.Format(
                 "Diff_ReplaceView_CascadeCaution", change.EntityName, string.Join(", ", lost));
             _logger.LogWarning(
                 "DROP VIEW \"{View}\" CASCADE will drop object(s) not in the schema directory: {Objects}",
                 change.EntityName, string.Join(", ", lost));
         }
+    }
+
+    /// <summary>
+    /// 依 <see cref="DeployOptions.AllowCascadeDrop"/> 分流「CASCADE 會刪除 schema 目錄外物件」的變更：
+    /// 未放行 → 自 Cautions 移到 <see cref="DeployPlan.Blockers"/>（整份計畫不得執行）；放行 → 維持 Caution。
+    /// 從 plan 的 Cautions 與各群組 Changes 收集，不依賴 Pre-Drop 清單的產生方式。
+    /// </summary>
+    internal static void ApplyCascadeDropPolicy(DeployPlan plan, DeployOptions options, ILogger? logger = null)
+    {
+        var cascading = plan.Cautions
+            .Concat(plan.Groups.SelectMany(g => g.Changes))
+            .Where(c => c.CascadeDropObjects is { Count: > 0 })
+            .Distinct()
+            .ToList();
+
+        if (cascading.Count == 0)
+            return;
+
+        if (options.AllowCascadeDrop)
+        {
+            foreach (var change in cascading)
+            {
+                if (!plan.Cautions.Contains(change))
+                    plan.Cautions.Add(change);
+            }
+            logger?.LogWarning(
+                "AllowCascadeDrop is enabled: {Count} DROP VIEW ... CASCADE operation(s) will drop object(s) outside the schema directory",
+                cascading.Count);
+            return;
+        }
+
+        foreach (var change in cascading)
+        {
+            change.BlockerMessage = CoreStrings.Format(
+                "Diff_ReplaceView_CascadeBlocked",
+                change.EntityName, string.Join(", ", change.CascadeDropObjects!));
+            plan.Cautions.Remove(change);
+            if (!plan.Blockers.Contains(change))
+                plan.Blockers.Add(change);
+        }
+        logger?.LogError(
+            "Deployment blocked: {Count} DROP VIEW ... CASCADE operation(s) would drop object(s) outside the schema directory",
+            cascading.Count);
     }
 
     private static readonly Regex FkReferencesPattern = new(

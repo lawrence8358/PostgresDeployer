@@ -29,4 +29,15 @@ public class SchemaChange
     /// 不影響執行，僅供 CLI/WPF 顯示提醒。
     /// </summary>
     public string? CautionMessage { get; set; }
+
+    /// <summary>
+    /// 此變更的 <c>DROP VIEW ... CASCADE</c> 會連帶刪除、且不在 schema 目錄中的物件（顯示用名稱，如 <c>"v_report" (view)</c>）。
+    /// 由分析流程填入；非空時依 <see cref="DeployOptions.AllowCascadeDrop"/> 決定列為阻擋項目或注意事項。
+    /// </summary>
+    public List<string>? CascadeDropObjects { get; set; }
+
+    /// <summary>
+    /// 阻擋訊息。非 null 時此變更會列入 <see cref="DeployPlan.Blockers"/>，整份部署計畫不得執行。
+    /// </summary>
+    public string? BlockerMessage { get; set; }
 }

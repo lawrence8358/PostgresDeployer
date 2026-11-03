@@ -100,6 +100,8 @@
   <data name="Settings_SeedData" xml:space="preserve"><value>Run init data scripts (Seed Data)</value></data>
   <data name="Settings_StopOnError" xml:space="preserve"><value>Stop on error</value></data>
   <data name="Settings_CreateDbIfNotExists" xml:space="preserve"><value>Auto-create database if it does not exist</value></data>
+  <data name="Settings_AllowCascadeDrop" xml:space="preserve"><value>Allow CASCADE to drop views outside the schema directory (not recommended)</value></data>
+  <data name="Settings_AllowCascadeDropTip" xml:space="preserve"><value>When a view must be dropped and recreated, DROP VIEW ... CASCADE also drops views / materialized views that depend on it. If any of them are not defined in the schema directory they will not be recreated. By default such a deployment is blocked; check this only if you accept losing those objects. Run Analyze again after changing this option.</value></data>
   <data name="Settings_Load" xml:space="preserve"><value>📂  Load Settings</value></data>
   <data name="Settings_Save" xml:space="preserve"><value>💾  Save</value></data>
   <data name="Settings_SaveAs" xml:space="preserve"><value>📄  Save As</value></data>
@@ -129,6 +131,7 @@
   <data name="Status_Analyzing" xml:space="preserve"><value>Analyzing schema differences...</value></data>
   <data name="Status_AnalyzeComplete" xml:space="preserve"><value>Analysis complete: {0} statements, {1} cautions</value></data>
   <data name="Status_AnalyzeFailed" xml:space="preserve"><value>Analysis failed: {0}</value></data>
+  <data name="Status_AnalyzeBlocked" xml:space="preserve"><value>Deployment blocked: {0} item(s) would drop views outside the schema directory (see "Blocked"). Add their definition files to the schema directory, or enable "Allow CASCADE to drop views outside the schema directory" in Settings and analyze again.</value></data>
   <data name="Status_DeployAllOk" xml:space="preserve"><value>Deploy complete! {0} groups all succeeded.</value></data>
   <data name="Status_DeployPartial" xml:space="preserve"><value>Deploy complete: {0} succeeded, {1} failed.</value></data>
   <data name="Status_Canceled" xml:space="preserve"><value>Deploy canceled.</value></data>
@@ -145,6 +148,7 @@
   <data name="Group_TableChanges" xml:space="preserve"><value>Table Changes</value></data>
   <data name="Group_Indexes" xml:space="preserve"><value>Indexes</value></data>
   <data name="Group_Cautions" xml:space="preserve"><value>Cautions</value></data>
+  <data name="Group_Blockers" xml:space="preserve"><value>Blocked (deployment will not run)</value></data>
   <data name="Group_Statement" xml:space="preserve"><value>Statement {0}</value></data>
 
   <!-- Dialog titles and messages -->

@@ -100,6 +100,8 @@
   <data name="Settings_SeedData" xml:space="preserve"><value>執行初始資料腳本（Seed Data）</value></data>
   <data name="Settings_StopOnError" xml:space="preserve"><value>發生錯誤時停止</value></data>
   <data name="Settings_CreateDbIfNotExists" xml:space="preserve"><value>資料庫不存在時自動建立</value></data>
+  <data name="Settings_AllowCascadeDrop" xml:space="preserve"><value>允許 CASCADE 刪除 schema 目錄外的 View（不建議）</value></data>
+  <data name="Settings_AllowCascadeDropTip" xml:space="preserve"><value>View 需要刪除重建時，DROP VIEW ... CASCADE 會連帶刪除依賴它的 View / Materialized View；其中不在 schema 目錄中的物件部署後不會重建。預設會阻擋此類部署，只有在確定可以失去這些物件時才勾選。變更此選項後請重新分析。</value></data>
   <data name="Settings_Load" xml:space="preserve"><value>📂  載入設定</value></data>
   <data name="Settings_Save" xml:space="preserve"><value>💾  儲存</value></data>
   <data name="Settings_SaveAs" xml:space="preserve"><value>📄  另存新檔</value></data>
@@ -129,6 +131,7 @@
   <data name="Status_Analyzing" xml:space="preserve"><value>正在分析 Schema 差異...</value></data>
   <data name="Status_AnalyzeComplete" xml:space="preserve"><value>分析完成: {0} 語句, {1} 注意事項</value></data>
   <data name="Status_AnalyzeFailed" xml:space="preserve"><value>分析失敗: {0}</value></data>
+  <data name="Status_AnalyzeBlocked" xml:space="preserve"><value>部署已被阻擋：{0} 個項目會刪除 schema 目錄外的 View（見「已阻擋」群組）。請將這些 View 的定義檔納入 schema 目錄，或在設定頁勾選「允許 CASCADE 刪除 schema 目錄外的 View」後重新分析。</value></data>
   <data name="Status_DeployAllOk" xml:space="preserve"><value>部署完成！{0} 個群組全部成功。</value></data>
   <data name="Status_DeployPartial" xml:space="preserve"><value>部署完成：{0} 成功, {1} 失敗。</value></data>
   <data name="Status_Canceled" xml:space="preserve"><value>部署已取消。</value></data>
@@ -145,6 +148,7 @@
   <data name="Group_TableChanges" xml:space="preserve"><value>資料表變更</value></data>
   <data name="Group_Indexes" xml:space="preserve"><value>索引</value></data>
   <data name="Group_Cautions" xml:space="preserve"><value>注意事項</value></data>
+  <data name="Group_Blockers" xml:space="preserve"><value>已阻擋（不會執行部署）</value></data>
   <data name="Group_Statement" xml:space="preserve"><value>語句 {0}</value></data>
 
   <!-- Dialog titles and messages -->

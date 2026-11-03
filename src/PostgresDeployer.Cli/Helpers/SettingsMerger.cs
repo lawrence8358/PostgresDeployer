@@ -18,6 +18,9 @@ public record CliArgs
     public string? InitData { get; init; }
     public string? Extensions { get; init; }
     public bool? CreateDatabaseIfNotExists { get; init; }
+
+    /// <summary>--allow-cascade-drop：有給才覆寫設定檔的 options.allowCascadeDrop（null = 沿用設定檔）</summary>
+    public bool? AllowCascadeDrop { get; init; }
 }
 
 /// <summary>
@@ -60,6 +63,8 @@ public static class SettingsMerger
         // 6. 選項覆蓋
         if (args.CreateDatabaseIfNotExists.HasValue)
             settings.Options.CreateDatabaseIfNotExists = args.CreateDatabaseIfNotExists.Value;
+        if (args.AllowCascadeDrop.HasValue)
+            settings.Options.AllowCascadeDrop = args.AllowCascadeDrop.Value;
 
         return settings;
     }

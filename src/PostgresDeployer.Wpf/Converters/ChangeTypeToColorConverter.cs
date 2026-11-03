@@ -38,6 +38,7 @@ public class ChangeTypeToColorConverter : IValueConverter
                 ChangeGroupType.TableChanges => Brushes.Orange,
                 ChangeGroupType.Indexes      => Brushes.DodgerBlue,
                 ChangeGroupType.Cautions     => Brushes.Red,
+                ChangeGroupType.Blockers     => Brushes.Crimson,
                 _ => Brushes.Gray
             };
         }

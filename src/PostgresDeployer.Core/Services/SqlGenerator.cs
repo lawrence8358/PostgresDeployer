@@ -1,6 +1,8 @@
 namespace PostgresDeployer.Core.Services;
 
 using System.Text;
+using System.Text.RegularExpressions;
+using PostgresDeployer.Core.Helpers;
 using PostgresDeployer.Core.Interfaces;
 using PostgresDeployer.Core.Models;
 
@@ -59,12 +61,49 @@ public class SqlGenerator : ISqlGenerator
 
     public string GenerateCreateIndex(string tableName, IndexDefinition index)
     {
+        // 來自 SQL 定義檔的索引：原樣執行，保留 WHERE / INCLUDE / WITH / opclass 等所有子句
+        if (!string.IsNullOrWhiteSpace(index.Definition))
+        {
+            var definition = RemoveConcurrently(index.Definition.TrimEnd());
+            return definition.EndsWith(';') ? definition : definition + ";";
+        }
+
         var unique = index.IsUnique ? "UNIQUE " : "";
+        var method = string.IsNullOrEmpty(index.Method) || index.Method.Equals("btree", StringComparison.OrdinalIgnoreCase)
+            ? ""
+            : $" USING {index.Method}";
         var cols = string.Join(", ",
             index.Columns.Select(c =>
-                $"\"{c.Name}\"{(c.IsDescending ? " DESC" : "")}"));
+                $"{(c.IsExpression ? c.Name : $"\"{c.Name}\"")}{(c.IsDescending ? " DESC" : "")}"));
 
-        return $"CREATE {unique}INDEX IF NOT EXISTS \"{index.Name}\" ON \"{tableName}\" ({cols});";
+        var sb = new StringBuilder();
+        sb.Append($"CREATE {unique}INDEX IF NOT EXISTS \"{index.Name}\" ON \"{tableName}\"{method} ({cols})");
+        if (index.IncludeColumns.Count > 0)
+            sb.Append($" INCLUDE ({string.Join(", ", index.IncludeColumns.Select(c => $"\"{c}\""))})");
+        if (!string.IsNullOrWhiteSpace(index.Predicate))
+            sb.Append($" WHERE {index.Predicate}");
+        sb.Append(';');
+        return sb.ToString();
+    }
+
+    private static readonly Regex ConcurrentlyPattern = new(
+        @"^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?<kw>CONCURRENTLY)\b\s*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// 移除 <c>CREATE [UNIQUE] INDEX CONCURRENTLY</c> 的 CONCURRENTLY：部署群組在交易內執行，
+    /// 而 CONCURRENTLY 不能在交易區塊中使用（cannot run inside a transaction block）。
+    /// 以遮蔽註解／字串後的文字比對，避免誤改註解或字串常值中的同名文字。
+    /// </summary>
+    private static string RemoveConcurrently(string definition)
+    {
+        var m = ConcurrentlyPattern.Match(SqlTextScanner.Mask(definition));
+        if (!m.Success)
+            return definition;
+
+        var kw = m.Groups["kw"];
+        var end = m.Index + m.Length; // 一併移除關鍵字後的空白
+        return definition[..kw.Index] + definition[end..];
     }
 
     public string GenerateDropIndex(string indexName)

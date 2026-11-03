@@ -43,6 +43,7 @@ PostgresDeployer takes the **desired state** approach:
 - Safe, transaction-based deployment with automatic rollback on failure
 - Dry-run mode to preview changes without applying them
 - Caution warnings for potentially destructive operations
+- Deployment is blocked (exit code 1) when a `DROP VIEW ... CASCADE` would drop views that are not in the schema directory — opt in with `--allow-cascade-drop`
 - Seed data support via MERGE statements
 - PostgreSQL extension management (e.g., `pgcrypto`)
 - CLI for scripted and CI/CD deployments
@@ -175,6 +176,7 @@ All commands accept connection parameters that override the config file:
 | `--only` | Deploy only `tables`, `views`, `seeds`, or `all` (default: `all`) |
 | `--log-file` | Write deployment log to file |
 | `--stop-on-error` | Stop deployment if any group fails (default: true) |
+| `--allow-cascade-drop` | Allow `DROP VIEW ... CASCADE` to drop dependent views that are not in the schema directory (otherwise the deployment is blocked, see [Blocked Deployments](#blocked-deployments-cascade-drop-outside-the-schema-directory)) |
 | `--schema` | Schema DDL directory path (contains Tables/, Views/, Functions/, etc.) |
 | `--init-data` | Seed data directory path |
 | `--extensions` | PostgreSQL extensions to ensure (comma-separated) |
@@ -194,6 +196,7 @@ This includes all SQL statements in execution order — extensions, table change
 | Option | Description |
 |--------|-------------|
 | `--output` / `-o` | Write diff report to file |
+| `--allow-cascade-drop` | Report CASCADE drops outside the schema directory as cautions instead of blockers |
 
 ### Configuration File
 
@@ -216,7 +219,8 @@ Generate a config file with `pgdeploy init`, then edit to match your environment
   "options": {
     "executeSeedData": true,
     "stopOnError": true,
-    "createDatabaseIfNotExists": false
+    "createDatabaseIfNotExists": false,
+    "allowCascadeDrop": false
   }
 }
 ```
@@ -253,6 +257,25 @@ When `--create-db-if-not-exists` is set (or `"createDatabaseIfNotExists": true` 
 - **`test-connection`**: Test the server connection (without specifying the target database). If the server is reachable, it reports whether the target database already exists or will be created on the next deploy.
 
 > **Note**: The PostgreSQL user must have `CREATEDB` privilege for automatic database creation to succeed.
+
+### Blocked Deployments: CASCADE Drop Outside the Schema Directory
+
+When a view's column list changes in a way `CREATE OR REPLACE VIEW` cannot handle, PostgresDeployer drops it first with `DROP VIEW ... CASCADE` (group `Drop Views (Pre-Alter)`). `CASCADE` also drops every view / materialized view that depends on it — in any schema. Views defined in the schema directory are recreated afterwards, but **objects that are not in the schema directory (e.g. views someone created directly in the database) would be lost**.
+
+By default PostgresDeployer detects this during analysis and **blocks the deployment**:
+
+| Command | Result when blocked |
+|---------|---------------------|
+| `deploy --dry-run` | Plan is printed with a `[BLOCKED]` section (written to stderr); exit code **1** |
+| `deploy` / `deploy --yes` | Nothing is executed and no RunScript is written; exit code **1** |
+| `diff` | Report lists the `[BLOCKED]` items; exit code **1** |
+
+A non-zero exit code makes the CI/CD step fail, so the pipeline never silently drops objects it does not manage.
+
+How to resolve:
+
+1. **Recommended** — add the definition files of the listed views to the schema directory, so they are recreated after the drop.
+2. If losing those objects is acceptable, explicitly allow it with `--allow-cascade-drop`, `"allowCascadeDrop": true` in the config `options`, or the **Allow CASCADE to drop views outside the schema directory** option in the WPF settings. The deployment then runs and the affected objects are listed as `[!]` cautions.
 
 ### CI/CD Integration
 
@@ -335,6 +358,7 @@ The WPF desktop application provides an interactive interface for deploying and 
 - **Run init data scripts** — whether to execute seed data on deploy
 - **Stop on error** — halt deployment if any group fails
 - **Auto-create database if not exists** — automatically create the target database when it does not exist; the Test Connection button will verify the server connection and report whether the database needs to be created
+- **Allow CASCADE to drop views outside the schema directory** — off by default; when a deployment would drop such views, the Deploy page shows a highlighted **Blocked** group and the Deploy button is disabled. Re-run Analyze after changing this option (see [Blocked Deployments](#blocked-deployments-cascade-drop-outside-the-schema-directory))
 
 The language can be switched at runtime (English / 繁體中文) from the sidebar.
 
@@ -350,16 +374,33 @@ All changes are detected automatically and applied in the correct order:
 | `[~NULL]` | Alter Column Nullable | NULL / NOT NULL constraint changed |
 | `[~DFLT]` | Alter Column Default | DEFAULT value changed or removed |
 | `[+IDX]` | Create Index | New index defined |
-| `[~IDX]` | Recreate Index | Index definition changed (drop + recreate) |
+| `[~IDX]` | Recreate Index | Index definition changed — columns, sort order, `UNIQUE`, `USING`, `INCLUDE` or partial-index `WHERE` (drop + recreate) |
 | `[-IDX]` | Drop Index | Index removed from definition |
 | `[-COL]` | Drop Column | Column removed from definition |
 | `[~PK]` | Recreate Primary Key | Primary key definition changed |
+| `[~CMT]` | Alter Comment | `COMMENT ON TABLE` / `COMMENT ON COLUMN` changed |
+| `[+VIEW]` | Create View | View not yet in the database |
+| `[+VCOL]` | Extend View | Columns only appended to the end of an existing view (existing column names and order unchanged) — applied directly with `CREATE OR REPLACE VIEW`, no drop |
+| `[~VIEW]` | Replace View | View columns renamed, removed, reordered or inserted in the middle, or the view depends on a table column whose type will change or which will be dropped (`DROP VIEW ... CASCADE` before table changes, then recreate) |
 
-> **Caution operations** — changes that could result in data loss (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT) are flagged with `[!]` warnings and require explicit confirmation before applying.
+> **Caution operations** — changes that could result in data loss or deployment failure (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT, creating a unique index on an existing table) are flagged with `[!]` warnings and require explicit confirmation before applying.
+>
+> **Blocked operations** — a `DROP VIEW ... CASCADE` that would also drop dependent views not defined in the schema directory is no longer just a caution: the whole deployment is blocked (`[BLOCKED]`, exit code 1) unless you opt in with `--allow-cascade-drop` / `"allowCascadeDrop": true`, in which case it is shown as a `[!]` caution. See [Blocked Deployments](#blocked-deployments-cascade-drop-outside-the-schema-directory).
+>
+> **Index comparison** — when an index in a SQL file is written differently from how PostgreSQL stores it (e.g. `IN (...)` in a partial-index `WHERE`, expression indexes), the analysis asks PostgreSQL to normalize it by creating the index on a temporary table inside a transaction that is then rolled back (nothing is left behind). This also happens during `--dry-run` / `diff`, so the database user needs the `TEMP` privilege; without it, the SQL text is compared as written and the index may be reported as `[~IDX]`. `CREATE INDEX CONCURRENTLY` in a SQL file is applied without `CONCURRENTLY`, because deployment groups run inside a transaction.
 
 ## Contributing
 
 See [docs/](docs/) for developer guides.
+
+To run the PostgreSQL integration tests, start a disposable container and set `PGD_TEST_CONNECTION` (without it these tests are reported as skipped):
+
+```bash
+docker run -d --name pgd-test-pg -e POSTGRES_PASSWORD=pgdtest -p 55432:5432 postgis/postgis:18-3.6
+PGD_TEST_CONNECTION="Host=localhost;Port=55432;Username=postgres;Password=pgdtest" dotnet test PostgresDeployer.sln
+```
+
+See [docs/dev-guide-getting-started.md](docs/dev-guide-getting-started.md) for details.
 
 ## License
 

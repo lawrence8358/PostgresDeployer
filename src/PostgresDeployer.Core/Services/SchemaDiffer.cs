@@ -235,22 +235,31 @@ public class SchemaDiffer : ISchemaDiffer
 
         foreach (var desiredIdx in desired.Indexes)
         {
+            // 唯一索引建在既有資料表上：若現有資料有重複鍵，建立時會失敗
+            var uniqueCaution = desiredIdx.IsUnique
+                ? CoreStrings.Format("Diff_UniqueIndex_Caution", desiredIdx.Name)
+                : null;
+
             if (!actualIdxMap.TryGetValue(desiredIdx.Name, out var actualIdx))
             {
                 changes.Add(new SchemaChange
                 {
                     Type = ChangeType.CreateIndex,
                     EntityName = desired.TableName,
-                    Description = CoreStrings.Format("Diff_CreateIndex", desiredIdx.Name)
+                    ColumnName = desiredIdx.Name,
+                    Description = CoreStrings.Format("Diff_CreateIndex", desiredIdx.Name),
+                    CautionMessage = uniqueCaution
                 });
             }
-            else if (!IndexesMatch(desiredIdx, actualIdx))
+            else if (!IndexDefinitionComparer.Matches(desiredIdx, actualIdx))
             {
                 changes.Add(new SchemaChange
                 {
                     Type = ChangeType.RecreateIndex,
                     EntityName = desired.TableName,
-                    Description = CoreStrings.Format("Diff_RecreateIndex", desiredIdx.Name)
+                    ColumnName = desiredIdx.Name,
+                    Description = CoreStrings.Format("Diff_RecreateIndex", desiredIdx.Name),
+                    CautionMessage = uniqueCaution
                 });
             }
         }
@@ -264,22 +273,11 @@ public class SchemaDiffer : ISchemaDiffer
                 {
                     Type = ChangeType.DropIndex,
                     EntityName = desired.TableName,
+                    ColumnName = actualIdx.Name,
                     Description = CoreStrings.Format("Diff_DropIndex", actualIdx.Name)
                 });
             }
         }
-    }
-
-    private static bool IndexesMatch(IndexDefinition a, IndexDefinition b)
-    {
-        if (a.IsUnique != b.IsUnique) return false;
-        if (a.Columns.Count != b.Columns.Count) return false;
-        for (int i = 0; i < a.Columns.Count; i++)
-        {
-            if (a.Columns[i].Name != b.Columns[i].Name) return false;
-            if (a.Columns[i].IsDescending != b.Columns[i].IsDescending) return false;
-        }
-        return true;
     }
 
     private void CompareForeignKeys(TableSchema desired, TableSchema actual, List<SchemaChange> changes)
@@ -387,13 +385,27 @@ public class SchemaDiffer : ISchemaDiffer
                     continue;
                 }
 
-                bool columnsChanged =
-                    desiredCols.Count != existingCols.Count ||
-                    desiredCols.Zip(existingCols).Any(pair =>
-                        !string.Equals(pair.First, pair.Second, StringComparison.Ordinal));
+                // 既有欄位是期望欄位的前綴（名稱、順序皆不變）→ 只是在尾端新增欄位，
+                // PostgreSQL 允許直接 CREATE OR REPLACE VIEW，不需 DROP（不會 CASCADE 刪到依賴此 View 的物件）
+                bool isPrefix =
+                    desiredCols.Count >= existingCols.Count &&
+                    existingCols.Zip(desiredCols).All(pair =>
+                        string.Equals(pair.First, pair.Second, StringComparison.Ordinal));
 
-                if (columnsChanged)
+                if (isPrefix && desiredCols.Count > existingCols.Count)
                 {
+                    var addedCols = desiredCols.Skip(existingCols.Count).Select(c => $"\"{c}\"");
+                    changes.Add(new SchemaChange
+                    {
+                        Type = ChangeType.ExtendView,
+                        EntityName = viewName,
+                        Description = CoreStrings.Format("Diff_ExtendView", viewName, string.Join(", ", addedCols)),
+                        Sql = sqlContent
+                    });
+                }
+                else if (!isPrefix)
+                {
+                    // 欄位改名、刪除、改順序或在中間插入 → CREATE OR REPLACE 會失敗（42P16），需先 DROP
                     changes.Add(new SchemaChange
                     {
                         Type = ChangeType.ReplaceView,

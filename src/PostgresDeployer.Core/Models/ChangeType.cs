@@ -55,4 +55,10 @@ public enum ChangeType
 
     /// <summary>重建外鍵約束（定義已變更，DROP + ADD CONSTRAINT）</summary>
     RecreateForeignKey,
+
+    /// <summary>
+    /// 擴充視圖（既有欄位名稱、順序不變，只在尾端新增欄位），
+    /// 直接 CREATE OR REPLACE VIEW，不需要 DROP（不會連帶刪除依賴此 View 的物件）
+    /// </summary>
+    ExtendView,
 }

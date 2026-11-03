@@ -25,6 +25,9 @@ public class ChangeTypeToColorConverter : IValueConverter
                 ChangeType.RecreateIndex        => Brushes.DodgerBlue,
                 ChangeType.DropIndex            => Brushes.Red,
                 ChangeType.DropColumn           => Brushes.Red,
+                ChangeType.CreateView           => Brushes.Green,
+                ChangeType.ExtendView           => Brushes.Orange,
+                ChangeType.ReplaceView          => Brushes.Red,
                 _ => Brushes.Gray
             };
         }
@@ -38,6 +41,7 @@ public class ChangeTypeToColorConverter : IValueConverter
                 ChangeGroupType.TableChanges => Brushes.Orange,
                 ChangeGroupType.Indexes      => Brushes.DodgerBlue,
                 ChangeGroupType.Cautions     => Brushes.Red,
+                ChangeGroupType.Blockers     => Brushes.Crimson,
                 _ => Brushes.Gray
             };
         }

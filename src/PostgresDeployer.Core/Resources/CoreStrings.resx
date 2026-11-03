@@ -82,7 +82,16 @@
   <data name="Diff_RecreateIndex" xml:space="preserve"><value>Recreate index "{0}" (definition changed)</value></data>
   <data name="Diff_DropIndex" xml:space="preserve"><value>Drop index "{0}" (not in SQL definition)</value></data>
   <data name="Diff_CreateView" xml:space="preserve"><value>Create view "{0}" (new)</value></data>
+  <data name="Diff_ExtendView" xml:space="preserve"><value>Extend view "{0}": add column(s) {1} (CREATE OR REPLACE, no drop)</value></data>
+  <data name="Diff_ReplaceView_DependsOnColumn" xml:space="preserve"><value>Replace view "{0}" (drop and recreate; it depends on column(s) {1} whose type will change or which will be dropped)</value></data>
   <data name="Diff_ReplaceView" xml:space="preserve"><value>Replace view "{0}" (drop and recreate)</value></data>
+  <data name="Diff_UniqueIndex_Caution" xml:space="preserve"><value>Warning: unique index "{0}" will be created on an existing table — deployment will fail if existing rows contain duplicate keys</value></data>
+  <data name="Diff_ReplaceView_CascadeCaution" xml:space="preserve"><value>Warning: DROP VIEW "{0}" CASCADE will also drop dependent object(s) that are NOT defined in the schema directory and will not be recreated: {1}</value></data>
+  <data name="Diff_ReplaceView_CascadeBlocked" xml:space="preserve"><value>Blocked: DROP VIEW "{0}" CASCADE would also drop dependent object(s) that are NOT defined in the schema directory and would not be recreated: {1}. Add their definition file(s) to the schema directory (recommended), or explicitly allow it with --allow-cascade-drop (CLI) / "allowCascadeDrop": true (options in the JSON config) / the "Allow CASCADE to drop views outside the schema directory" option in the WPF settings.</value></data>
+  <data name="Parse_MissingSemicolon" xml:space="preserve"><value>Line {0}: a new statement ({1}) starts here, but the previous statement is not terminated with ';'</value></data>
+  <data name="Parse_IndexMissingCloseParen" xml:space="preserve"><value>The column list of index "{0}" is missing a closing parenthesis.</value></data>
+  <data name="Deploy_FailedAt" xml:space="preserve"><value>Failed at: {0}</value></data>
+  <data name="Deploy_FailedAtLine" xml:space="preserve"><value>Failed at: {0} (line {1})</value></data>
   <data name="Diff_AddFK" xml:space="preserve"><value>Add foreign key "{0}" ({1}) → "{2}"</value></data>
   <data name="Diff_DropFK" xml:space="preserve"><value>Drop foreign key "{0}" (not in SQL definition)</value></data>
   <data name="Diff_DropFK_Caution" xml:space="preserve"><value>Warning: dropping foreign key "{0}" will remove referential integrity constraint</value></data>
@@ -91,6 +100,7 @@
 
   <!-- DeployExecutor: user-visible messages -->
   <data name="Deploy_Cancelled" xml:space="preserve"><value>Deployment cancelled by user</value></data>
+  <data name="Deploy_Blocked" xml:space="preserve"><value>Deployment blocked by {0} item(s) — no changes were applied:</value></data>
   <data name="Deploy_ExtensionHint" xml:space="preserve"><value>Hint: This error is often caused by a missing PostgreSQL extension (e.g., postgis, uuid-ossp). Add the required extension in the Extensions list and redeploy.</value></data>
   <data name="Deploy_Executing" xml:space="preserve"><value>[{0}] executing ({1}/{2})</value></data>
 

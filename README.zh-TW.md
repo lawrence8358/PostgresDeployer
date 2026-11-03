@@ -43,6 +43,7 @@ PostgresDeployer 採用**期望狀態（Desired State）**方式：
 - 基於 Transaction 的安全部署，失敗時自動 Rollback
 - Dry-run 模式，可預覽變更而不實際執行
 - 高風險操作的 Caution 警告機制
+- `DROP VIEW ... CASCADE` 會連帶刪除 schema 目錄外的 View 時阻擋部署（exit code 1），需以 `--allow-cascade-drop` 明確放行
 - 支援 MERGE 陳述式的種子資料（Seed Data）
 - PostgreSQL Extension 管理（例如 `pgcrypto`）
 - CLI 工具，適用於腳本化與 CI/CD 部署
@@ -175,6 +176,7 @@ pgdeploy deploy --config PostgresDeployer.json --log-file deploy.log
 | `--only` | 只部署 `tables`、`views`、`seeds` 或 `all`（預設：`all`）|
 | `--log-file` | 將部署日誌寫入指定檔案 |
 | `--stop-on-error` | 任一群組執行失敗時停止部署（預設：true）|
+| `--allow-cascade-drop` | 允許 `DROP VIEW ... CASCADE` 連帶刪除不在 schema 目錄中的相依 View（未加時會阻擋部署，見[部署被阻擋](#部署被阻擋cascade-會刪除-schema-目錄外的物件)）|
 | `--schema` | Schema DDL 目錄路徑（包含 Tables/、Views/、Functions/ 等） |
 | `--init-data` | 種子資料目錄路徑 |
 | `--extensions` | 要確保安裝的 PostgreSQL Extension（逗號分隔）|
@@ -194,6 +196,7 @@ RunScripts/
 | 選項 | 說明 |
 |------|------|
 | `--output` / `-o` | 將差異報告輸出至檔案 |
+| `--allow-cascade-drop` | 將「CASCADE 會刪除 schema 目錄外的物件」列為注意事項而非阻擋項目 |
 
 ### 設定檔格式
 
@@ -216,7 +219,8 @@ RunScripts/
   "options": {
     "executeSeedData": true,
     "stopOnError": true,
-    "createDatabaseIfNotExists": false
+    "createDatabaseIfNotExists": false,
+    "allowCascadeDrop": false
   }
 }
 ```
@@ -253,6 +257,25 @@ RunScripts/
 - **`test-connection`**：改為測試伺服器連線（不指定目標資料庫），若伺服器可連線，則回報目標資料庫是否已存在、或將於下次部署時建立。
 
 > **注意**：PostgreSQL 使用者需具備 `CREATEDB` 權限，自動建立資料庫才能成功。
+
+### 部署被阻擋：CASCADE 會刪除 schema 目錄外的物件
+
+當 View 的欄位清單變更是 `CREATE OR REPLACE VIEW` 無法處理的情況時，PostgresDeployer 會先以 `DROP VIEW ... CASCADE` 刪除它（群組 `Drop Views (Pre-Alter)`）。`CASCADE` 會連帶刪除所有依賴它的 View / Materialized View（不限 schema）。schema 目錄中有定義的 View 之後會重建，但**不在 schema 目錄中的物件（例如他人直接在資料庫建立的 View）會被刪除且不會重建**。
+
+預設情況下，PostgresDeployer 在分析階段偵測到此情況就會**阻擋部署**：
+
+| 指令 | 被阻擋時的結果 |
+|------|----------------|
+| `deploy --dry-run` | 顯示部署計畫與 `[BLOCKED]` 區塊（輸出至 stderr），exit code **1** |
+| `deploy` / `deploy --yes` | 不執行任何群組、不寫入 RunScript，exit code **1** |
+| `diff` | 報告列出 `[BLOCKED]` 項目，exit code **1** |
+
+非 0 的 exit code 會讓 CI/CD 步驟失敗，避免流程在沒人察覺的情況下刪掉不受管理的物件。
+
+處理方式：
+
+1. **建議**：將清單中列出的 View 定義檔納入 schema 目錄，刪除後即會重建。
+2. 若確定可以失去這些物件，請明確放行：CLI 加 `--allow-cascade-drop`、設定檔 `options` 設定 `"allowCascadeDrop": true`，或在 WPF 設定頁勾選「**允許 CASCADE 刪除 schema 目錄外的 View**」。放行後會照常部署，受影響的物件以 `[!]` 注意事項列出。
 
 ### CI/CD 自動化部署
 
@@ -335,6 +358,7 @@ WPF 應用程式提供互動式的 Schema 部署與管理介面，與指令列�
 - **執行初始資料腳本** — 是否於部署時執行 Seed Data
 - **發生錯誤時停止** — 任一群組失敗時是否停止後續部署
 - **資料庫不存在時自動建立** — 啟用後，部署與比對前會自動確認資料庫存在；測試連線時改為測試伺服器連線，並回報目標資料庫是否需要建立
+- **允許 CASCADE 刪除 schema 目錄外的 View** — 預設不勾選；部署會刪除此類 View 時，部署頁會以醒目的「已阻擋」群組標示，且「執行部署」按鈕不可用。變更此選項後請重新分析（見[部署被阻擋](#部署被阻擋cascade-會刪除-schema-目錄外的物件)）
 
 可從左邊欄位設定鈕在執行時切換語系（English / 繁體中文）。所有編輯後的設定也可以存成 json 設定檔供日後或 CI/CD 使用。
 
@@ -350,16 +374,33 @@ WPF 應用程式提供互動式的 Schema 部署與管理介面，與指令列�
 | `[~NULL]` | 變更 Nullable | NULL / NOT NULL 條件約束改變 |
 | `[~DFLT]` | 變更預設值 | DEFAULT 值改變或移除 |
 | `[+IDX]` | 建立索引 | 新增的索引 |
-| `[~IDX]` | 重建索引 | 索引定義改變（先 DROP 再 CREATE）|
+| `[~IDX]` | 重建索引 | 索引定義改變：欄位、排序、`UNIQUE`、`USING`、`INCLUDE` 或部分索引的 `WHERE` 條件（先 DROP 再 CREATE）|
 | `[-IDX]` | 刪除索引 | 定義中已移除的索引 |
 | `[-COL]` | 刪除欄位 | 定義中已移除的欄位 |
 | `[~PK]` | 重建主鍵 | 主鍵定義已改變 |
+| `[~CMT]` | 變更註解 | `COMMENT ON TABLE` / `COMMENT ON COLUMN` 改變 |
+| `[+VIEW]` | 建立視圖 | DB 中尚不存在的 View |
+| `[+VCOL]` | 擴充視圖 | 既有 View 只在尾端新增欄位（既有欄位名稱、順序不變），直接 `CREATE OR REPLACE VIEW`，不刪除 |
+| `[~VIEW]` | 取代視圖 | View 欄位改名／刪除／改順序／在中間插入，或依賴的資料表欄位要變更型別／刪除（於資料表變更前 `DROP VIEW ... CASCADE`，之後重建）|
 
-> **Caution 操作** — 可能造成資料遺失的變更（刪除欄位、主鍵變更、型別縮減、在無預設值的情況下加入 NOT NULL）會以 `[!]` 警告標示，需明確確認後才會套用。
+> **Caution 操作** — 可能造成資料遺失或部署失敗的變更（刪除欄位、主鍵變更、型別縮減、在無預設值的情況下加入 NOT NULL、在既有資料表建立唯一索引）會以 `[!]` 警告標示，需明確確認後才會套用。
+>
+> **阻擋操作** — `DROP VIEW ... CASCADE` 會連帶刪除不在 schema 目錄中的相依 View 時，已不只是 Caution：整個部署會被阻擋（`[BLOCKED]`、exit code 1），除非以 `--allow-cascade-drop` / `"allowCascadeDrop": true` 明確放行，此時改以 `[!]` 注意事項顯示。詳見[部署被阻擋](#部署被阻擋cascade-會刪除-schema-目錄外的物件)。
+>
+> **索引比對** — SQL 檔中的索引寫法與 PostgreSQL 儲存的寫法不同時（例如部分索引 `WHERE` 中的 `IN (...)`、運算式索引），分析階段會在交易內於暫存表建立同樣的索引，請 PostgreSQL 正規化後再比對，結束時整個交易回滾（不留下任何物件）。`--dry-run`／`diff` 也會這麼做，因此資料庫帳號需要 `TEMP` 權限；沒有權限時改以 SQL 原文比對，該索引可能顯示為 `[~IDX]`。SQL 檔中的 `CREATE INDEX CONCURRENTLY` 會去掉 `CONCURRENTLY` 後執行（部署群組在交易內執行）。
 
 ## 開發者文件
 
 請參閱 [docs/](docs/) 目錄中的開發者指引。
+
+執行 PostgreSQL 整合測試：啟動拋棄式容器並設定 `PGD_TEST_CONNECTION`（未設定時這些測試會顯示為略過）：
+
+```bash
+docker run -d --name pgd-test-pg -e POSTGRES_PASSWORD=pgdtest -p 55432:5432 postgis/postgis:18-3.6
+PGD_TEST_CONNECTION="Host=localhost;Port=55432;Username=postgres;Password=pgdtest" dotnet test PostgresDeployer.sln
+```
+
+詳見 [docs/dev-guide-getting-started.md](docs/dev-guide-getting-started.md)。
 
 ## 授權
 

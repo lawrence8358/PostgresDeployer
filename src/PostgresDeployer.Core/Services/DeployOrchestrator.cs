@@ -3,6 +3,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PostgresDeployer.Core.Helpers;
 using PostgresDeployer.Core.Interfaces;
 using PostgresDeployer.Core.Models;
 using PostgresDeployer.Core.Resources;
@@ -70,7 +71,18 @@ public class DeployOrchestrator : IDeployOrchestrator
                     procedureFiles.Add((fileName, content));
                     break;
                 case Models.SchemaFileType.Table:
-                    desiredTables.Add(parser.ParseTableSql(content));
+                    TableSchema table;
+                    try
+                    {
+                        table = parser.ParseTableSql(content);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        // 附上檔名，方便定位是哪個 SQL 檔有問題
+                        throw new InvalidOperationException($"{fileName}: {ex.Message}", ex);
+                    }
+                    table.SourceFile = fileName;
+                    desiredTables.Add(table);
                     break;
                 case Models.SchemaFileType.View:
                     viewFiles.Add((fileName, content));
@@ -160,6 +172,8 @@ public class DeployOrchestrator : IDeployOrchestrator
             actualTables.Count, existingViewColumns.Count);
 
         // ═══ Phase 3: 差異比對 ═══
+        await CanonicalizeIndexesAsync(introspector, desiredTables, actualTables, ct);
+
         _logger.LogInformation("Computing schema differences...");
         var changes = differ.ComputeChanges(desiredTables, actualTables);
 
@@ -201,6 +215,8 @@ public class DeployOrchestrator : IDeployOrchestrator
             {
                 case ChangeType.CreateTable:
                     createGroup.Statements.Add(change.Sql!);
+                    createGroup.StatementLabels.Add(
+                        StripFirstSegment(tableMap[change.EntityName].SourceFile ?? change.EntityName));
                     createGroup.Changes.Add(change);
                     break;
 
@@ -294,46 +310,29 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.CreateIndex:
                 {
-                    if (!tableMap.TryGetValue(change.EntityName, out var table))
-                        break;
-                    var idxDef = table.Indexes.FirstOrDefault(i =>
-                        change.Description.Contains(i.Name));
-                    if (idxDef != null)
-                    {
-                        change.Sql = generator.GenerateCreateIndex(change.EntityName, idxDef);
-                        indexGroup.Statements.Add(change.Sql);
-                        indexGroup.Changes.Add(change);
-                    }
+                    var idxDef = FindIndex(tableMap, change);
+                    change.Sql = generator.GenerateCreateIndex(change.EntityName, idxDef);
+                    indexGroup.Statements.Add(change.Sql);
+                    indexGroup.Changes.Add(change);
                     break;
                 }
 
                 case ChangeType.RecreateIndex:
                 {
-                    if (!tableMap.TryGetValue(change.EntityName, out var table))
-                        break;
-                    var idxDef = table.Indexes.FirstOrDefault(i =>
-                        change.Description.Contains(i.Name));
-                    if (idxDef != null)
-                    {
-                        indexGroup.Statements.Add(generator.GenerateDropIndex(idxDef.Name));
-                        indexGroup.Statements.Add(
-                            generator.GenerateCreateIndex(change.EntityName, idxDef));
-                        indexGroup.Changes.Add(change);
-                    }
+                    var idxDef = FindIndex(tableMap, change);
+                    indexGroup.Statements.Add(generator.GenerateDropIndex(idxDef.Name));
+                    change.Sql = generator.GenerateCreateIndex(change.EntityName, idxDef);
+                    indexGroup.Statements.Add(change.Sql);
+                    indexGroup.Changes.Add(change);
                     break;
                 }
 
                 case ChangeType.DropIndex:
                 {
-                    var dropIdxName = actualTables.Values
-                        .SelectMany(t => t.Indexes)
-                        .FirstOrDefault(i => change.Description.Contains(i.Name))?.Name;
-                    if (dropIdxName != null)
-                    {
-                        change.Sql = generator.GenerateDropIndex(dropIdxName);
-                        indexGroup.Statements.Add(change.Sql);
-                        indexGroup.Changes.Add(change);
-                    }
+                    var dropIdx = FindIndex(actualTables, change);
+                    change.Sql = generator.GenerateDropIndex(dropIdx.Name);
+                    indexGroup.Statements.Add(change.Sql);
+                    indexGroup.Changes.Add(change);
                     break;
                 }
 
@@ -410,11 +409,20 @@ public class DeployOrchestrator : IDeployOrchestrator
 
         if (createGroup.Statements.Count > 0) plan.Groups.Add(createGroup);
 
+        // schema 目錄中依賴「本次要變更型別／刪除之欄位」的 View 也必須 Pre-Drop（轉為 ReplaceView），
+        // 否則 ALTER TABLE 會被 PG 拒絕：cannot alter type of a column used by a view or rule
+        await MarkColumnDependentViewsForReplaceAsync(introspector, changes, desiredViews, viewChanges, ct);
+
         // 對於需要取代的 View（ReplaceView），在 Table 變更執行前先 DROP，
-        // 避免 PG 拒絕：(1) 欄位型別變更時的依賴鎖定，(2) CREATE OR REPLACE 無法改變欄位定義（42P16）
+        // 避免 PG 拒絕：(1) 欄位型別變更／刪除時的依賴鎖定，(2) CREATE OR REPLACE 無法改變欄位定義（42P16）。
+        // 只在尾端新增欄位的 View（ExtendView）不需 DROP，由 Views 群組直接 CREATE OR REPLACE。
         var replaceViewChanges = viewChanges.Where(c => c.Type == ChangeType.ReplaceView).ToList();
         if (replaceViewChanges.Count > 0)
         {
+            await AddCascadeDropCautionsAsync(
+                introspector, replaceViewChanges, desiredViews.Select(v => v.ViewName), ct);
+            plan.Cautions.AddRange(replaceViewChanges.Where(c => c.CautionMessage != null));
+
             var dropViewsGroup = new DeployGroup { Name = "Drop Views (Pre-Alter)" };
 
             // 倒序 Drop，減少視圖間相依性衝突（CASCADE 會自動處理剩餘依賴）
@@ -462,8 +470,12 @@ public class DeployOrchestrator : IDeployOrchestrator
             }
         }
 
-        _logger.LogInformation("Analysis complete: {Groups} group(s), {Statements} statement(s), {Cautions} caution(s)",
-            plan.Groups.Count, plan.TotalStatements, plan.Cautions.Count);
+        // CASCADE 會刪除 schema 目錄外物件的變更：依設定分流為阻擋項目或注意事項
+        ApplyCascadeDropPolicy(plan, settings.Options, _logger);
+
+        _logger.LogInformation(
+            "Analysis complete: {Groups} group(s), {Statements} statement(s), {Cautions} caution(s), {Blockers} blocker(s)",
+            plan.Groups.Count, plan.TotalStatements, plan.Cautions.Count, plan.Blockers.Count);
 
         return plan;
     }
@@ -474,6 +486,9 @@ public class DeployOrchestrator : IDeployOrchestrator
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
+        // 被阻擋的計畫一律拒絕執行（在連線前檢查，不執行任何群組），保護所有呼叫端
+        EnsureNotBlocked(settings, plan);
+
         var connStr = settings.Connection.ToConnectionString();
 
         var executorLogger = _loggerFactory?.CreateLogger<DeployExecutor>()
@@ -509,6 +524,228 @@ public class DeployOrchestrator : IDeployOrchestrator
             successCount, failCount);
 
         return results;
+    }
+
+    /// <summary>
+    /// 以「執行當下」的設定重新判斷阻擋（不只看分析時的 <see cref="DeployPlan.IsBlocked"/>）：
+    /// 計畫中有 CASCADE 會刪除 schema 目錄外物件的變更、且目前未放行（<see cref="DeployOptions.AllowCascadeDrop"/> = false）時，
+    /// 拋出 <see cref="InvalidOperationException"/>。例如 WPF 先勾選放行、分析後再取消勾選，仍會在此擋下。
+    /// </summary>
+    private void EnsureNotBlocked(DeploySettings settings, DeployPlan plan)
+    {
+        var blocking = CascadeDropPolicy.GetBlockingChanges(plan, settings.Options);
+        if (blocking.Count == 0)
+        {
+            if (plan.IsBlocked)
+                _logger.LogWarning(
+                    "Deploy plan has {Count} blocker(s) but AllowCascadeDrop is enabled — proceeding", plan.Blockers.Count);
+            return;
+        }
+
+        var details = string.Join(Environment.NewLine,
+            blocking.Select(b => $"  - {b.BlockerMessage ?? CascadeDropPolicy.BuildBlockerMessage(b)}"));
+        _logger.LogError("Deployment blocked, no group executed: {Count} blocker(s)", blocking.Count);
+        throw new InvalidOperationException(
+            CoreStrings.Format("Deploy_Blocked", blocking.Count) + Environment.NewLine + details);
+    }
+
+    /// <summary>
+    /// 依 SchemaChange 的索引名稱（ColumnName）精確取得索引定義。
+    /// 不可用 Description 子字串比對：名稱互為子字串時（IX_X ⊂ UIX_X_...）會取到錯誤的索引。
+    /// </summary>
+    private static IndexDefinition FindIndex(IReadOnlyDictionary<string, TableSchema> tables, SchemaChange change)
+    {
+        if (!tables.TryGetValue(change.EntityName, out var table))
+            throw new InvalidOperationException(
+                $"Diff produced a change for non-existent table: {change.EntityName}");
+        return table.Indexes.FirstOrDefault(i => string.Equals(i.Name, change.ColumnName, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException(
+                $"Index not found in table {change.EntityName}: {change.ColumnName}");
+    }
+
+    /// <summary>
+    /// SQL 檔與資料庫寫法不同的同名索引（WHERE 條件、運算式欄位），先請 PostgreSQL 正規化 SQL 檔中的定義再比對，
+    /// 避免每次部署都誤判為「定義已變更」而重建索引。
+    /// </summary>
+    private async Task CanonicalizeIndexesAsync(
+        SchemaIntrospector introspector,
+        List<TableSchema> desiredTables,
+        Dictionary<string, TableSchema> actualTables,
+        CancellationToken ct)
+    {
+        var candidates = new List<(string TableName, IndexDefinition Index)>();
+        foreach (var table in desiredTables)
+        {
+            if (!actualTables.TryGetValue(table.TableName, out var actualTable))
+                continue;
+
+            foreach (var idx in table.Indexes)
+            {
+                var actualIdx = actualTable.Indexes.FirstOrDefault(
+                    i => string.Equals(i.Name, idx.Name, StringComparison.Ordinal));
+                if (actualIdx == null || IndexDefinitionComparer.Matches(idx, actualIdx))
+                    continue;
+                if (idx.Predicate != null || actualIdx.Predicate != null || idx.Columns.Any(c => c.IsExpression))
+                    candidates.Add((table.TableName, idx));
+            }
+        }
+
+        if (candidates.Count == 0)
+            return;
+
+        try
+        {
+            await introspector.CanonicalizeIndexesAsync(candidates, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to canonicalize index definitions, comparing SQL text as written");
+        }
+    }
+
+    /// <summary>
+    /// 找出 schema 目錄中（遞迴）依賴本次 AlterColumnType / DropColumn 欄位的 View，
+    /// 將其變更改為（或新增一筆）ReplaceView，讓它在 Table Changes 前被 Pre-Drop、之後由 Views 群組重建。
+    /// 不在 schema 目錄中的 View 不處理（ALTER 會明確失敗，不會默默刪除）。
+    /// </summary>
+    private async Task MarkColumnDependentViewsForReplaceAsync(
+        SchemaIntrospector introspector,
+        List<SchemaChange> tableChanges,
+        List<(string ViewName, string SqlContent)> desiredViews,
+        List<SchemaChange> viewChanges,
+        CancellationToken ct)
+    {
+        var columns = tableChanges
+            .Where(c => (c.Type is ChangeType.AlterColumnType or ChangeType.DropColumn) && c.ColumnName != null)
+            .Select(c => (c.EntityName, c.ColumnName!))
+            .Distinct()
+            .ToList();
+        if (columns.Count == 0 || desiredViews.Count == 0)
+            return;
+
+        var dependents = await introspector.GetViewsDependingOnColumnsAsync(columns, ct);
+        if (dependents.Count == 0)
+            return;
+
+        foreach (var (viewName, sqlContent) in desiredViews)
+        {
+            if (!dependents.TryGetValue(viewName, out var dependedColumns))
+                continue;
+
+            var existing = viewChanges.FirstOrDefault(
+                c => string.Equals(c.EntityName, viewName, StringComparison.Ordinal));
+            if (existing?.Type == ChangeType.ReplaceView)
+                continue; // 原本就會 Pre-Drop
+
+            var description = CoreStrings.Format(
+                "Diff_ReplaceView_DependsOnColumn", viewName, string.Join(", ", dependedColumns));
+
+            if (existing != null)
+            {
+                // 例如 ExtendView：改為 ReplaceView，不重複新增
+                existing.Type = ChangeType.ReplaceView;
+                existing.Description = description;
+            }
+            else
+            {
+                viewChanges.Add(new SchemaChange
+                {
+                    Type = ChangeType.ReplaceView,
+                    EntityName = viewName,
+                    Description = description,
+                    Sql = sqlContent
+                });
+            }
+
+            _logger.LogInformation(
+                "View \"{View}\" depends on column(s) {Columns} that will change type or be dropped — it will be dropped before table changes and recreated",
+                viewName, string.Join(", ", dependedColumns));
+        }
+
+        // 新增的項目排回 schema 目錄的檔案順序，讓顯示順序與 Views 群組一致
+        var order = desiredViews
+            .Select((v, i) => (v.ViewName, i))
+            .DistinctBy(x => x.ViewName)
+            .ToDictionary(x => x.ViewName, x => x.i, StringComparer.Ordinal);
+        var sorted = viewChanges.OrderBy(c => order.GetValueOrDefault(c.EntityName, int.MaxValue)).ToList();
+        viewChanges.Clear();
+        viewChanges.AddRange(sorted);
+    }
+
+    /// <summary>
+    /// Pre-Alter 的 DROP VIEW ... CASCADE 會連帶刪除依賴該 View 的物件；
+    /// 其中不在 schema 目錄中的物件部署後不會重建。
+    /// 此方法只負責「偵測」：把這些物件記在 <see cref="SchemaChange.CascadeDropObjects"/> 並填入 CautionMessage；
+    /// 要列為阻擋項目或注意事項，由 AnalyzeAsync 結尾的 <see cref="ApplyCascadeDropPolicy"/> 依設定統一分流。
+    /// </summary>
+    private async Task AddCascadeDropCautionsAsync(
+        SchemaIntrospector introspector,
+        List<SchemaChange> replaceViewChanges,
+        IEnumerable<string> desiredViewNames,
+        CancellationToken ct)
+    {
+        // schema 目錄中的 View 一律部署到 public schema：以 (schema, 名稱) 結構化比對，不依賴顯示字串格式
+        var desired = desiredViewNames.ToHashSet(StringComparer.Ordinal);
+
+        var dependents = await introspector.GetViewDependentsAsync(
+            replaceViewChanges.Select(c => c.EntityName).ToList(), ct);
+
+        foreach (var change in replaceViewChanges)
+        {
+            if (!dependents.TryGetValue(change.EntityName, out var list))
+                continue;
+
+            var lost = list
+                .Where(d => !(d.Schema == "public" && desired.Contains(d.Name)))
+                .Select(d => d.ToString())
+                .ToList();
+            if (lost.Count == 0)
+                continue;
+
+            change.CascadeDropObjects = lost;
+            change.CautionMessage = CoreStrings.Format(
+                "Diff_ReplaceView_CascadeCaution", change.EntityName, string.Join(", ", lost));
+            _logger.LogWarning(
+                "DROP VIEW \"{View}\" CASCADE will drop object(s) not in the schema directory: {Objects}",
+                change.EntityName, string.Join(", ", lost));
+        }
+    }
+
+    /// <summary>
+    /// 依 <see cref="DeployOptions.AllowCascadeDrop"/> 分流「CASCADE 會刪除 schema 目錄外物件」的變更：
+    /// 未放行 → 自 Cautions 移到 <see cref="DeployPlan.Blockers"/>（整份計畫不得執行）；放行 → 維持 Caution。
+    /// 從 plan 的 Cautions 與各群組 Changes 收集，不依賴 Pre-Drop 清單的產生方式。
+    /// </summary>
+    internal static void ApplyCascadeDropPolicy(DeployPlan plan, DeployOptions options, ILogger? logger = null)
+    {
+        var cascading = CascadeDropPolicy.FindCascadeDropChanges(plan);
+        if (cascading.Count == 0)
+            return;
+
+        var blocking = CascadeDropPolicy.GetBlockingChanges(plan, options);
+        if (blocking.Count == 0)
+        {
+            foreach (var change in cascading)
+            {
+                if (!plan.Cautions.Contains(change))
+                    plan.Cautions.Add(change);
+            }
+            logger?.LogWarning(
+                "AllowCascadeDrop is enabled: {Count} DROP VIEW ... CASCADE operation(s) will drop object(s) outside the schema directory",
+                cascading.Count);
+            return;
+        }
+
+        foreach (var change in blocking)
+        {
+            change.BlockerMessage = CascadeDropPolicy.BuildBlockerMessage(change);
+            plan.Cautions.Remove(change);
+            if (!plan.Blockers.Contains(change))
+                plan.Blockers.Add(change);
+        }
+        logger?.LogError(
+            "Deployment blocked: {Count} DROP VIEW ... CASCADE operation(s) would drop object(s) outside the schema directory",
+            cascading.Count);
     }
 
     private static readonly Regex FkReferencesPattern = new(

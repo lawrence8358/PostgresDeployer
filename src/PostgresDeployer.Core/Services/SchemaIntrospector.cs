@@ -1,6 +1,5 @@
 namespace PostgresDeployer.Core.Services;
 
-using System.Text.RegularExpressions;
 using Npgsql;
 using PostgresDeployer.Core.Helpers;
 using PostgresDeployer.Core.Interfaces;
@@ -14,8 +13,30 @@ public class SchemaIntrospector : ISchemaIntrospector
 {
     private readonly string _connectionString;
 
-    private static readonly Regex IndexColumnsRegex = new(
-        @"\(([^)]+)\)$", RegexOptions.Compiled);
+    /// <summary>
+    /// 索引內省查詢（{0} 為篩選條件）。
+    /// 由 pg_index 直接取得每個欄位／運算式、DESC 旗標、INCLUDE 欄位、存取方法與 WHERE 條件，
+    /// 不以正規式切割 pg_get_indexdef() 的輸出（partial index 的 WHERE 會被誤當成欄位清單）。
+    /// </summary>
+    private const string IndexQueryTemplate = """
+        SELECT
+            i.relname                                   AS index_name,
+            ix.indisunique                              AS is_unique,
+            am.amname                                   AS method,
+            ix.indnkeyatts                              AS key_count,
+            ARRAY(SELECT (ix.indoption[k - 1] & 1) = 1
+                  FROM generate_series(1, ix.indnkeyatts) AS k
+                  ORDER BY k)                           AS desc_flags,
+            ARRAY(SELECT pg_get_indexdef(ix.indexrelid, k, true)
+                  FROM generate_series(1, ix.indnatts) AS k
+                  ORDER BY k)                           AS column_defs,
+            pg_get_expr(ix.indpred, ix.indrelid, true)  AS predicate
+        FROM pg_index ix
+        JOIN pg_class i ON i.oid = ix.indexrelid
+        JOIN pg_am am   ON am.oid = i.relam
+        WHERE {0}
+        ORDER BY i.relname
+        """;
 
     public SchemaIntrospector(string connectionString)
     {
@@ -200,41 +221,18 @@ public class SchemaIntrospector : ISchemaIntrospector
         }
 
         // ═══ 查詢索引（排除主鍵索引）═══
-        const string indexSql = """
-            SELECT
-                i.relname AS index_name,
-                ix.indisunique AS is_unique,
-                pg_get_indexdef(ix.indexrelid) AS index_def
-            FROM pg_class t
-            JOIN pg_index ix ON t.oid = ix.indrelid
-            JOIN pg_class i ON i.oid = ix.indexrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            WHERE n.nspname = 'public'
-                AND t.relname = @tableName
-                AND ix.indisprimary = false
-            ORDER BY i.relname
-            """;
+        var indexSql = string.Format(IndexQueryTemplate, """
+            ix.indrelid = (
+                SELECT c.oid FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public' AND c.relname = @tableName AND c.relkind IN ('r', 'p'))
+            AND NOT ix.indisprimary
+            """);
 
         await using (var cmd = new NpgsqlCommand(indexSql, conn))
         {
             cmd.Parameters.AddWithValue("@tableName", tableName);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-
-            while (await reader.ReadAsync(ct))
-            {
-                var indexName = reader.GetString(0);
-                var isUnique = reader.GetBoolean(1);
-                var indexDef = reader.GetString(2);
-
-                var columns = ParseIndexDefColumns(indexDef);
-
-                schema.Indexes.Add(new IndexDefinition
-                {
-                    Name = indexName,
-                    IsUnique = isUnique,
-                    Columns = columns
-                });
-            }
+            schema.Indexes.AddRange(await ReadIndexesAsync(cmd, ct));
         }
 
         // ═══ 查詢外鍵約束 ═══
@@ -416,31 +414,267 @@ public class SchemaIntrospector : ISchemaIntrospector
         return names;
     }
 
-    /// <summary>
-    /// 從 pg_get_indexdef() 結果解析索引欄位清單。
-    /// </summary>
-    private static List<IndexColumn> ParseIndexDefColumns(string indexDef)
+    public async Task CanonicalizeIndexesAsync(
+        IReadOnlyList<(string TableName, IndexDefinition Index)> indexes,
+        CancellationToken ct = default)
     {
-        var match = IndexColumnsRegex.Match(indexDef);
-        if (!match.Success)
-            return [];
+        if (indexes.Count == 0)
+            return;
 
-        var columnsText = match.Groups[1].Value;
-        return columnsText.Split(',')
-            .Select(c =>
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        // 資料表名稱 → 暫存表名稱；null 表示該表的暫存表建立失敗（同表其餘索引直接略過）
+        var tempTables = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var generator = new SqlGenerator();
+        int tableSeq = 0;
+        int seq = 0;
+
+        foreach (var (tableName, index) in indexes)
+        {
+            if (!tempTables.TryGetValue(tableName, out var tempTable))
             {
-                var trimmed = c.Trim();
-                var isDesc = trimmed.EndsWith(" DESC", StringComparison.OrdinalIgnoreCase);
-                var name = trimmed
-                    .Replace(" DESC", "", StringComparison.OrdinalIgnoreCase)
-                    .Replace(" ASC", "", StringComparison.OrdinalIgnoreCase)
-                    .Trim()
-                    .Trim('"');
+                // 暫存表在自己的 savepoint 中建立並 release，之後索引探測失敗時回滾到 pgd_canon 不會連帶回滾暫存表
+                tempTable = await TryCreateCanonTempTableAsync(conn, tx, tableName, $"pgd_canon_t{tableSeq++}", ct);
+                tempTables[tableName] = tempTable;
+            }
+            if (tempTable == null)
+                continue;
 
-                return new IndexColumn { Name = name, IsDescending = isDesc };
-            })
-            .Where(c => c.Name.Length > 0)
-            .ToList();
+            await tx.SaveAsync("pgd_canon", ct);
+            try
+            {
+                // 以 SQL 檔的定義在暫存表上建立同樣的索引，再讀回 PostgreSQL 正規化後的欄位與條件
+                var tempIndex = $"pgd_canon_i{seq++}";
+                var probe = new IndexDefinition
+                {
+                    Name = tempIndex,
+                    Method = index.Method,
+                    Columns = index.Columns,
+                    IncludeColumns = index.IncludeColumns,
+                    Predicate = index.Predicate,
+                };
+                await ExecuteAsync(conn, tx, generator.GenerateCreateIndex(tempTable, probe), ct);
+
+                var sql = string.Format(IndexQueryTemplate, "ix.indexrelid = to_regclass(@name)");
+                await using var cmd = new NpgsqlCommand(sql, conn, tx);
+                cmd.Parameters.AddWithValue("@name", $"pg_temp.\"{tempIndex}\"");
+                var canonical = (await ReadIndexesAsync(cmd, ct)).Single();
+
+                index.Columns = canonical.Columns;
+                index.IncludeColumns = canonical.IncludeColumns;
+                index.Predicate = canonical.Predicate;
+                await tx.ReleaseAsync("pgd_canon", ct);
+            }
+            catch (PostgresException)
+            {
+                // 例如引用了資料庫尚未存在的欄位：保留 SQL 檔原文，交由差異比對判定
+                await tx.RollbackAsync("pgd_canon", ct);
+            }
+        }
+
+        // 只用於取得正規化結果，不留下任何物件
+        await tx.RollbackAsync(ct);
+    }
+
+    /// <summary>
+    /// 以 <c>LIKE public."table"</c> 建立索引正規化用的暫存表（獨立 savepoint）；失敗時回滾該 savepoint 並回傳 null。
+    /// </summary>
+    private static async Task<string?> TryCreateCanonTempTableAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, string tableName, string tempTable, CancellationToken ct)
+    {
+        await tx.SaveAsync("pgd_canon_table", ct);
+        try
+        {
+            await ExecuteAsync(conn, tx,
+                $"CREATE TEMP TABLE \"{tempTable}\" (LIKE public.\"{tableName.Replace("\"", "\"\"")}\")", ct);
+            await tx.ReleaseAsync("pgd_canon_table", ct);
+            return tempTable;
+        }
+        catch (PostgresException)
+        {
+            await tx.RollbackAsync("pgd_canon_table", ct);
+            return null;
+        }
+    }
+
+    public async Task<Dictionary<string, List<DependentObject>>> GetViewDependentsAsync(
+        IReadOnlyCollection<string> viewNames,
+        CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, List<DependentObject>>(StringComparer.Ordinal);
+        if (viewNames.Count == 0)
+            return result;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        // 透過 pg_depend → pg_rewrite 遞迴找出依賴各 View 的 View / Materialized View，
+        // 也就是 DROP VIEW ... CASCADE 會一併刪除的物件。
+        const string sql = """
+            WITH RECURSIVE deps(root_name, objid) AS (
+                SELECT c.relname::text, c.oid
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = ANY(@names)
+                  AND c.relkind IN ('v', 'm')
+                UNION
+                SELECT d.root_name, r.ev_class
+                FROM deps d
+                JOIN pg_depend dep
+                  ON dep.refclassid = 'pg_class'::regclass
+                 AND dep.refobjid   = d.objid
+                 AND dep.classid    = 'pg_rewrite'::regclass
+                JOIN pg_rewrite r ON r.oid = dep.objid
+                WHERE r.ev_class <> d.objid
+            )
+            SELECT DISTINCT d.root_name, n.nspname::text, c.relname::text, c.relkind::text
+            FROM deps d
+            JOIN pg_class c     ON c.oid = d.objid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE NOT (n.nspname = 'public' AND c.relname = d.root_name)
+            ORDER BY 1, 2, 3
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@names", viewNames.ToArray());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        while (await reader.ReadAsync(ct))
+        {
+            var root = reader.GetString(0);
+            var kind = reader.GetString(3) == "m" ? DependentObject.KindMaterializedView : DependentObject.KindView;
+
+            if (!result.TryGetValue(root, out var list))
+            {
+                list = [];
+                result[root] = list;
+            }
+            list.Add(new DependentObject(reader.GetString(1), reader.GetString(2), kind));
+        }
+
+        return result;
+    }
+
+    public async Task<Dictionary<string, List<string>>> GetViewsDependingOnColumnsAsync(
+        IReadOnlyCollection<(string TableName, string ColumnName)> columns,
+        CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        if (columns.Count == 0)
+            return result;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        // 1. pg_depend（refobjid = 表 oid、refobjsubid = attnum、classid = pg_rewrite）→ pg_rewrite.ev_class：直接引用該欄位的 View
+        // 2. 再遞迴往上找依賴這些 View 的 View（DROP ... CASCADE 時也會一併刪除）
+        const string sql = """
+            WITH RECURSIVE cols(tbl, col) AS (
+                SELECT * FROM unnest(@tables::text[], @columns::text[])
+            ),
+            deps(objid, src) AS (
+                SELECT r.ev_class, '"' || cols.tbl || '"."' || cols.col || '"'
+                FROM cols
+                JOIN pg_class t      ON t.relname = cols.tbl AND t.relkind IN ('r', 'p')
+                JOIN pg_namespace tn ON tn.oid = t.relnamespace AND tn.nspname = 'public'
+                JOIN pg_attribute a  ON a.attrelid = t.oid AND a.attname = cols.col AND NOT a.attisdropped
+                JOIN pg_depend dep
+                  ON dep.refclassid  = 'pg_class'::regclass
+                 AND dep.refobjid    = t.oid
+                 AND dep.refobjsubid = a.attnum
+                 AND dep.classid     = 'pg_rewrite'::regclass
+                JOIN pg_rewrite r ON r.oid = dep.objid
+                WHERE r.ev_class <> t.oid
+                UNION
+                SELECT r.ev_class, d.src
+                FROM deps d
+                JOIN pg_depend dep
+                  ON dep.refclassid = 'pg_class'::regclass
+                 AND dep.refobjid   = d.objid
+                 AND dep.classid    = 'pg_rewrite'::regclass
+                JOIN pg_rewrite r ON r.oid = dep.objid
+                WHERE r.ev_class <> d.objid
+            )
+            SELECT DISTINCT c.relname::text, d.src
+            FROM deps d
+            JOIN pg_class c     ON c.oid = d.objid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind = 'v'
+            ORDER BY 1, 2
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@tables", columns.Select(c => c.TableName).ToArray());
+        cmd.Parameters.AddWithValue("@columns", columns.Select(c => c.ColumnName).ToArray());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        while (await reader.ReadAsync(ct))
+        {
+            var view = reader.GetString(0);
+            if (!result.TryGetValue(view, out var list))
+            {
+                list = [];
+                result[view] = list;
+            }
+            list.Add(reader.GetString(1));
+        }
+
+        return result;
+    }
+
+    private static async Task ExecuteAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string sql, CancellationToken ct)
+    {
+        await using var cmd = new NpgsqlCommand(sql, conn, tx);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// 讀取 <see cref="IndexQueryTemplate"/> 的查詢結果。
+    /// </summary>
+    private static async Task<List<IndexDefinition>> ReadIndexesAsync(NpgsqlCommand cmd, CancellationToken ct)
+    {
+        var result = new List<IndexDefinition>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        while (await reader.ReadAsync(ct))
+        {
+            var keyCount = reader.GetInt16(3);
+            var descFlags = reader.GetFieldValue<bool[]>(4);
+            var columnDefs = reader.GetFieldValue<string[]>(5);
+
+            var index = new IndexDefinition
+            {
+                Name = reader.GetString(0),
+                IsUnique = reader.GetBoolean(1),
+                Method = reader.GetString(2),
+                Predicate = reader.IsDBNull(6) ? null : reader.GetString(6),
+            };
+
+            for (int k = 0; k < columnDefs.Length; k++)
+            {
+                var (name, isExpression) = IndexExpressionNormalizer.ParseColumnToken(columnDefs[k]);
+                if (k < keyCount)
+                {
+                    index.Columns.Add(new IndexColumn
+                    {
+                        Name = name,
+                        IsExpression = isExpression,
+                        IsDescending = k < descFlags.Length && descFlags[k],
+                    });
+                }
+                else
+                {
+                    index.IncludeColumns.Add(name);
+                }
+            }
+
+            result.Add(index);
+        }
+
+        return result;
     }
 
     /// <summary>

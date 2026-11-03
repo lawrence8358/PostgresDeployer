@@ -24,7 +24,10 @@ public interface ISchemaDiffer
     /// </summary>
     /// <param name="desiredViews">期望的 View 清單（ViewName, SQL 內容）</param>
     /// <param name="existingViewColumns">資料庫現有 View 的欄位名稱（依順序），以 View 名稱為 key</param>
-    /// <returns>差異變更清單（CreateView 或 ReplaceView）</returns>
+    /// <returns>
+    /// 差異變更清單：CreateView（新 View）、ExtendView（只在尾端新增欄位，不需 DROP）
+    /// 或 ReplaceView（欄位改名／刪除／改順序／中間插入或無法解析，需先 DROP）
+    /// </returns>
     List<SchemaChange> ComputeViewChanges(
         List<(string ViewName, string SqlContent)> desiredViews,
         Dictionary<string, List<string>> existingViewColumns);

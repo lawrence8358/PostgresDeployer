@@ -17,6 +17,10 @@ var createDbOption = new Option<bool>("--create-db-if-not-exists")
 {
     Description = "Automatically create the target database if it does not exist"
 };
+var allowCascadeDropOption = new Option<bool>("--allow-cascade-drop")
+{
+    Description = "Allow DROP VIEW ... CASCADE to drop dependent views that are not in the schema directory (otherwise the deployment is blocked and exits with code 1)"
+};
 
 // ═══ Path options ═══
 var schemaOption = new Option<string?>("--schema") { Description = "Schema DDL directory path (Tables/Views/Functions/Sequences/Procedures)" };
@@ -36,6 +40,7 @@ deployCommand.Add(createDbOption);
 deployCommand.Add(schemaOption);
 deployCommand.Add(initDataOption);
 deployCommand.Add(extensionsOption);
+deployCommand.Add(allowCascadeDropOption);
 
 var dryRunOption = new Option<bool>("--dry-run") { Description = "Preview changes only, do not execute" };
 var yesOption = new Option<bool>("--yes") { Description = "Skip confirmation prompt and execute immediately" };
@@ -64,7 +69,8 @@ deployCommand.SetAction(async parseResult =>
             Schema = parseResult.GetValue(schemaOption),
             InitData = parseResult.GetValue(initDataOption),
             Extensions = parseResult.GetValue(extensionsOption),
-            CreateDatabaseIfNotExists = parseResult.GetValue(createDbOption) ? true : null
+            CreateDatabaseIfNotExists = parseResult.GetValue(createDbOption) ? true : null,
+            AllowCascadeDrop = parseResult.GetValue(allowCascadeDropOption) ? true : null
         },
         parseResult.GetValue(dryRunOption),
         parseResult.GetValue(yesOption),
@@ -86,6 +92,7 @@ diffCommand.Add(createDbOption);
 diffCommand.Add(schemaOption);
 diffCommand.Add(initDataOption);
 diffCommand.Add(extensionsOption);
+diffCommand.Add(allowCascadeDropOption);
 
 var diffOutputOption = new Option<string?>("--output", "-o") { Description = "Diff report output file path" };
 diffCommand.Add(diffOutputOption);
@@ -105,7 +112,8 @@ diffCommand.SetAction(async parseResult =>
             Schema = parseResult.GetValue(schemaOption),
             InitData = parseResult.GetValue(initDataOption),
             Extensions = parseResult.GetValue(extensionsOption),
-            CreateDatabaseIfNotExists = parseResult.GetValue(createDbOption) ? true : null
+            CreateDatabaseIfNotExists = parseResult.GetValue(createDbOption) ? true : null,
+            AllowCascadeDrop = parseResult.GetValue(allowCascadeDropOption) ? true : null
         },
         parseResult.GetValue(diffOutputOption));
 });

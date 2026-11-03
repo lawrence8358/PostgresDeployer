@@ -72,6 +72,15 @@ public static class DiffCommand
                 Console.WriteLine(report);
             }
 
+            // 9. 被阻擋 → 回傳 1（與 deploy --dry-run 一致：報告照常輸出，但 CD 的檢查步驟會失敗）
+            if (plan.IsBlocked)
+            {
+                // 放行方式已寫在報告的 [X] 阻擋訊息中，不另外重複
+                await Console.Error.WriteLineAsync(
+                    $"Deployment would be BLOCKED by {plan.Blockers.Count} item(s) (exit code 1). See the [BLOCKED] section of the report.");
+                return 1;
+            }
+
             return 0;
         }
         catch (Exception ex)
@@ -119,7 +128,13 @@ public static class DiffCommand
             lines.Add("");
         }
 
-        lines.Add($"Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s)");
+        if (plan.IsBlocked)
+        {
+            lines.AddRange(PlanBlockerFormatter.FormatBlockedSection(plan));
+            lines.Add("");
+        }
+
+        lines.Add(PlanBlockerFormatter.FormatTotalLine(plan));
 
         if (!plan.HasChanges)
         {

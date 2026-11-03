@@ -356,7 +356,8 @@ WPF 應用程式提供互動式的 Schema 部署與管理介面，與指令列�
 | `[~PK]` | 重建主鍵 | 主鍵定義已改變 |
 | `[~CMT]` | 變更註解 | `COMMENT ON TABLE` / `COMMENT ON COLUMN` 改變 |
 | `[+VIEW]` | 建立視圖 | DB 中尚不存在的 View |
-| `[~VIEW]` | 取代視圖 | View 欄位清單改變（於資料表變更前 `DROP VIEW ... CASCADE`，之後重建）|
+| `[+VCOL]` | 擴充視圖 | 既有 View 只在尾端新增欄位（既有欄位名稱、順序不變），直接 `CREATE OR REPLACE VIEW`，不刪除 |
+| `[~VIEW]` | 取代視圖 | View 欄位改名／刪除／改順序／在中間插入，或依賴的資料表欄位要變更型別／刪除（於資料表變更前 `DROP VIEW ... CASCADE`，之後重建）|
 
 > **Caution 操作** — 可能造成資料遺失或部署失敗的變更（刪除欄位、主鍵變更、型別縮減、在無預設值的情況下加入 NOT NULL、在既有資料表建立唯一索引、`DROP VIEW ... CASCADE` 會連帶刪除不在 schema 目錄中的相依 View）會以 `[!]` 警告標示，需明確確認後才會套用。
 

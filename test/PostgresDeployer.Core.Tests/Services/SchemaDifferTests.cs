@@ -336,12 +336,81 @@ public class SchemaDifferTests
     }
 
     [Fact]
-    public void ComputeViewChanges_ExistingViewColumnChanged_ReturnsReplaceView()
+    public void ComputeViewChanges_ColumnsAppendedAtEnd_ReturnsExtendView()
     {
-        // SQL 欄位：Id, Name（與 DB 不同）
-        const string newSql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"Id\", 'x' AS \"Name\";";
+        // SQL 欄位：Id, Name, Code；DB 目前為 Id → 只在尾端新增，可直接 CREATE OR REPLACE，不需 DROP
+        const string newSql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"Id\", 'x' AS \"Name\", 'c' AS \"Code\";";
         var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", newSql) };
-        // DB 目前只有 Id 一個欄位
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["Id"]
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ExtendView, changes[0].Type);
+        Assert.Equal("vw_Test", changes[0].EntityName);
+        Assert.Equal(newSql, changes[0].Sql);
+        Assert.Contains("\"Name\", \"Code\"", changes[0].Description);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_ColumnInsertedInMiddle_ReturnsReplaceView()
+    {
+        // 在中間插入欄位 → CREATE OR REPLACE 會失敗（cannot change name of view column）→ 需 DROP
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"A\", 2 AS \"C\", 3 AS \"B\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["A", "B"]
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_ColumnRenamed_ReturnsReplaceView()
+    {
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"Id\", 'x' AS \"FullName\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["Id", "Name"]
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_TrailingColumnRemoved_ReturnsReplaceView()
+    {
+        // 刪除尾端欄位：期望欄位是既有欄位的前綴（反方向），CREATE OR REPLACE 無法刪欄位 → 需 DROP
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"Id\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
+        var existingCols = new Dictionary<string, List<string>>
+        {
+            ["vw_Test"] = ["Id", "Name"]
+        };
+
+        var changes = _differ.ComputeViewChanges(desired, existingCols);
+
+        Assert.Single(changes);
+        Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
+    }
+
+    [Fact]
+    public void ComputeViewChanges_ColumnCaseChanged_ReturnsReplaceView()
+    {
+        // 欄位名稱以 Ordinal 比對：大小寫不同視為改名
+        const string sql = "CREATE OR REPLACE VIEW \"vw_Test\" AS SELECT 1 AS \"id\", 'x' AS \"Name\";";
+        var desired = new List<(string ViewName, string SqlContent)> { ("vw_Test", sql) };
         var existingCols = new Dictionary<string, List<string>>
         {
             ["vw_Test"] = ["Id"]
@@ -351,8 +420,6 @@ public class SchemaDifferTests
 
         Assert.Single(changes);
         Assert.Equal(ChangeType.ReplaceView, changes[0].Type);
-        Assert.Equal("vw_Test", changes[0].EntityName);
-        Assert.Equal(newSql, changes[0].Sql);
     }
 
     [Fact]
@@ -389,24 +456,27 @@ public class SchemaDifferTests
     }
 
     [Fact]
-    public void ComputeViewChanges_MixedViews_ReturnsBothTypes()
+    public void ComputeViewChanges_MixedViews_ReturnsAllTypes()
     {
         var desired = new List<(string ViewName, string SqlContent)>
         {
             ("vw_New",      "CREATE OR REPLACE VIEW \"vw_New\" AS SELECT 1 AS \"Id\";"),
-            ("vw_Changed",  "CREATE OR REPLACE VIEW \"vw_Changed\" AS SELECT 1 AS \"Id\", 2 AS \"NewCol\";"),
+            ("vw_Extended", "CREATE OR REPLACE VIEW \"vw_Extended\" AS SELECT 1 AS \"Id\", 2 AS \"NewCol\";"),
+            ("vw_Changed",  "CREATE OR REPLACE VIEW \"vw_Changed\" AS SELECT 2 AS \"NewCol\", 1 AS \"Id\";"),
             ("vw_Same",     "CREATE OR REPLACE VIEW \"vw_Same\" AS SELECT t.\"Id\" FROM \"T\" t;")
         };
         var existingCols = new Dictionary<string, List<string>>
         {
-            ["vw_Changed"] = ["Id"],              // 欄位改變
-            ["vw_Same"]    = ["Id"]               // 欄位相同
+            ["vw_Extended"] = ["Id"],             // 尾端新增欄位
+            ["vw_Changed"]  = ["Id"],             // 在前面插入欄位
+            ["vw_Same"]     = ["Id"]              // 欄位相同
         };
 
         var changes = _differ.ComputeViewChanges(desired, existingCols);
 
-        Assert.Equal(2, changes.Count); // vw_New (CreateView) + vw_Changed (ReplaceView)；vw_Same 不加入
+        Assert.Equal(3, changes.Count); // vw_Same 不加入
         Assert.Equal(ChangeType.CreateView,   changes.First(c => c.EntityName == "vw_New").Type);
+        Assert.Equal(ChangeType.ExtendView,   changes.First(c => c.EntityName == "vw_Extended").Type);
         Assert.Equal(ChangeType.ReplaceView,  changes.First(c => c.EntityName == "vw_Changed").Type);
         Assert.DoesNotContain(changes, c => c.EntityName == "vw_Same");
     }

@@ -99,11 +99,9 @@ public static class DeployCommand
                 await Console.Error.WriteLineAsync(dryRun
                     ? "Dry run complete. Deployment is BLOCKED — a real deployment would not run (exit code 1)."
                     : "Deployment BLOCKED. No changes applied (exit code 1).");
-                await Console.Error.WriteLineAsync(
-                    "To proceed anyway, re-run with --allow-cascade-drop or set \"allowCascadeDrop\": true in the config options.");
-                logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}] Deployment blocked: {plan.Blockers.Count} blocker(s)");
-                foreach (var blocker in plan.Blockers)
-                    logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}]   [BLOCKED] {blocker.BlockerMessage}");
+                // 放行方式已寫在每筆 [X] 阻擋訊息中，不另外重複
+                foreach (var line in PlanBlockerFormatter.FormatBlockedSection(plan))
+                    logWriter?.WriteLine($"[{DateTime.Now:HH:mm:ss}] {line}");
                 return 1;
             }
 
@@ -246,16 +244,13 @@ public static class DeployCommand
             // 阻擋訊息寫到 stderr，CD 記錄中較醒目
             await Console.Out.FlushAsync();
             await Console.Error.WriteLineAsync();
-            await Console.Error.WriteLineAsync($"  [BLOCKED] ({plan.Blockers.Count} item(s)) — deployment will not run");
-            foreach (var blocker in plan.Blockers)
-                await Console.Error.WriteLineAsync($"    [X] {blocker.BlockerMessage}");
+            foreach (var line in PlanBlockerFormatter.FormatBlockedSection(plan, indent: "  "))
+                await Console.Error.WriteLineAsync(line);
             await Console.Error.FlushAsync();
         }
 
         Console.WriteLine();
-        Console.WriteLine(plan.IsBlocked
-            ? $"  Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s), {plan.Blockers.Count} blocker(s)"
-            : $"  Total: {plan.TotalStatements} statement(s), {plan.Cautions.Count} caution(s)");
+        Console.WriteLine(PlanBlockerFormatter.FormatTotalLine(plan, indent: "  "));
     }
 
     private static void PrintResults(List<DeployResult> results)

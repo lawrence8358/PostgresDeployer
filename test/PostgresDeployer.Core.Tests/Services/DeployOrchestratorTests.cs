@@ -137,6 +137,52 @@ public class DeployOrchestratorTests
         Assert.Empty(results);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_AllowedAtAnalysisButRevokedBeforeExecution_ThrowsBeforeConnecting()
+    {
+        // WPF 情境：先勾選放行 → 分析（Blockers 為空、僅列 caution）→ 取消勾選 → 部署，必須以執行當下的設定擋下
+        var change = CascadeChange();
+        var plan = PlanWith(change);
+        DeployOrchestrator.ApplyCascadeDropPolicy(plan, new DeployOptions { AllowCascadeDrop = true });
+        Assert.False(plan.IsBlocked);
+
+        var progressMessages = new List<string>();
+        var orchestrator = new DeployOrchestrator(NullLogger<DeployOrchestrator>.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            orchestrator.ExecuteAsync(
+                UnreachableDbSettings(allowCascadeDrop: false),
+                plan,
+                new SyncProgress(progressMessages)));
+
+        Assert.Contains("v_external", ex.Message);
+        Assert.Contains("--allow-cascade-drop", ex.Message);
+        Assert.Empty(progressMessages); // 沒有任何群組開始執行
+    }
+
+    // ═══ CascadeDropPolicy ═══
+
+    [Fact]
+    public void CascadeDropPolicy_GetBlockingChanges_DependsOnlyOnCurrentOptions()
+    {
+        var change = CascadeChange();
+        var plan = PlanWith(change);
+
+        Assert.Same(change, Assert.Single(CascadeDropPolicy.GetBlockingChanges(plan, new DeployOptions())));
+        Assert.Empty(CascadeDropPolicy.GetBlockingChanges(plan, new DeployOptions { AllowCascadeDrop = true }));
+    }
+
+    [Fact]
+    public void CascadeDropPolicy_FindCascadeDropChanges_DeduplicatesAcrossBlockersCautionsAndGroups()
+    {
+        var change = CascadeChange();
+        var plan = PlanWith(change); // 同時在 Cautions 與群組 Changes
+        plan.Blockers.Add(change);
+        plan.Cautions.Add(new SchemaChange { Type = ChangeType.DropColumn, EntityName = "t", CautionMessage = "x" });
+
+        Assert.Same(change, Assert.Single(CascadeDropPolicy.FindCascadeDropChanges(plan)));
+    }
+
     private sealed class SyncProgress(List<string> messages) : IProgress<string>
     {
         public void Report(string value) => messages.Add(value);

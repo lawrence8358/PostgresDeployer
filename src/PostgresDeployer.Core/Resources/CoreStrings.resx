@@ -89,6 +89,7 @@
   <data name="Diff_ReplaceView_CascadeCaution" xml:space="preserve"><value>Warning: DROP VIEW "{0}" CASCADE will also drop dependent object(s) that are NOT defined in the schema directory and will not be recreated: {1}</value></data>
   <data name="Diff_ReplaceView_CascadeBlocked" xml:space="preserve"><value>Blocked: DROP VIEW "{0}" CASCADE would also drop dependent object(s) that are NOT defined in the schema directory and would not be recreated: {1}. Add their definition file(s) to the schema directory (recommended), or explicitly allow it with --allow-cascade-drop (CLI) / "allowCascadeDrop": true (options in the JSON config) / the "Allow CASCADE to drop views outside the schema directory" option in the WPF settings.</value></data>
   <data name="Parse_MissingSemicolon" xml:space="preserve"><value>Line {0}: a new statement ({1}) starts here, but the previous statement is not terminated with ';'</value></data>
+  <data name="Parse_IndexMissingCloseParen" xml:space="preserve"><value>The column list of index "{0}" is missing a closing parenthesis.</value></data>
   <data name="Deploy_FailedAt" xml:space="preserve"><value>Failed at: {0}</value></data>
   <data name="Deploy_FailedAtLine" xml:space="preserve"><value>Failed at: {0} (line {1})</value></data>
   <data name="Diff_AddFK" xml:space="preserve"><value>Add foreign key "{0}" ({1}) → "{2}"</value></data>

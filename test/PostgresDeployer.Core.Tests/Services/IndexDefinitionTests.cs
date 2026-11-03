@@ -1,5 +1,6 @@
 namespace PostgresDeployer.Core.Tests.Services;
 
+using PostgresDeployer.Core.Helpers;
 using PostgresDeployer.Core.Models;
 using PostgresDeployer.Core.Services;
 
@@ -187,15 +188,15 @@ public class IndexDefinitionTests
     }
 
     [Fact]
-    public void IndexesMatch_DifferentMethodOrInclude_ReturnsFalse()
+    public void IndexDefinitionComparer_DifferentMethodOrInclude_ReturnsFalse()
     {
         var a = new IndexDefinition { Name = "IX", Columns = [new IndexColumn { Name = "A" }] };
         var b = new IndexDefinition { Name = "IX", Columns = [new IndexColumn { Name = "A" }], Method = "hash" };
         var c = new IndexDefinition { Name = "IX", Columns = [new IndexColumn { Name = "A" }], IncludeColumns = ["B"] };
 
-        Assert.False(SchemaDiffer.IndexesMatch(a, b));
-        Assert.False(SchemaDiffer.IndexesMatch(a, c));
-        Assert.True(SchemaDiffer.IndexesMatch(a, new IndexDefinition { Name = "IX", Columns = [new IndexColumn { Name = "A" }] }));
+        Assert.False(IndexDefinitionComparer.Matches(a, b));
+        Assert.False(IndexDefinitionComparer.Matches(a, c));
+        Assert.True(IndexDefinitionComparer.Matches(a, new IndexDefinition { Name = "IX", Columns = [new IndexColumn { Name = "A" }] }));
     }
 
     // ═══ Generator ═══
@@ -229,5 +230,34 @@ public class IndexDefinitionTests
         Assert.Equal(
             "CREATE INDEX IF NOT EXISTS \"IX_T\" ON \"T\" USING gist (\"Geom\") INCLUDE (\"Id\") WHERE \"Geom\" IS NOT NULL;",
             sql);
+    }
+
+    [Theory]
+    [InlineData(
+        "CREATE INDEX CONCURRENTLY IF NOT EXISTS \"IX_T_A\" ON \"T\" (\"A\")",
+        "CREATE INDEX IF NOT EXISTS \"IX_T_A\" ON \"T\" (\"A\");")]
+    [InlineData(
+        "create unique index concurrently \"UIX_T_A\" on \"T\" (\"A\") WHERE \"A\" > 0",
+        "create unique index \"UIX_T_A\" on \"T\" (\"A\") WHERE \"A\" > 0;")]
+    [InlineData(
+        "CREATE INDEX /* 線上建立 */ CONCURRENTLY \"IX_T_A\" ON \"T\" (\"A\")",
+        "CREATE INDEX /* 線上建立 */ \"IX_T_A\" ON \"T\" (\"A\");")]
+    public void GenerateCreateIndex_DefinitionWithConcurrently_RemovesKeyword(string definition, string expected)
+    {
+        // 部署群組在交易內執行，CONCURRENTLY 會失敗（cannot run inside a transaction block）
+        var idx = new IndexDefinition { Name = "IX", Definition = definition };
+
+        Assert.Equal(expected, _gen.GenerateCreateIndex("T", idx));
+    }
+
+    [Theory]
+    [InlineData("CREATE INDEX \"CONCURRENTLY\" ON \"T\" (\"A\")")]
+    [InlineData("CREATE INDEX \"IX_T_A\" ON \"T\" (\"A\") WHERE \"Note\" <> 'CONCURRENTLY'")]
+    [InlineData("-- CREATE INDEX CONCURRENTLY\nCREATE INDEX \"IX_T_A\" ON \"T\" (\"A\")")]
+    public void GenerateCreateIndex_ConcurrentlyInIdentifierStringOrComment_Unchanged(string definition)
+    {
+        var idx = new IndexDefinition { Name = "IX", Definition = definition };
+
+        Assert.Equal(definition + ";", _gen.GenerateCreateIndex("T", idx));
     }
 }

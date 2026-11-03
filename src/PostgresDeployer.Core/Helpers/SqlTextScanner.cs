@@ -20,6 +20,14 @@ public static class SqlTextScanner
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
+    /// 不檢查漏分號的陳述式：<c>CREATE [OR REPLACE] RULE ... DO [ALSO|INSTEAD] INSERT INTO ...</c>
+    /// 的動作本來就可以換行寫在行首，不代表漏了分號。
+    /// </summary>
+    private static readonly Regex SkipTerminatorCheckPattern = new(
+        @"^CREATE\s+(?:OR\s+REPLACE\s+)?RULE\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
     /// 回傳與原文等長的字串：註解、字串常值、引號識別項、dollar-quote 的「內容」以空白取代（保留換行與引號字元）。
     /// </summary>
     public static string Mask(string sql)
@@ -198,13 +206,15 @@ public static class SqlTextScanner
 
     /// <summary>
     /// 找出「陳述式中間另起新陳述式」的位置（行首、括號外出現 CREATE / COMMENT ON / ALTER TABLE 等），
-    /// 這通常代表前一個陳述式結尾漏了分號。回傳原文中的位置與關鍵字；沒有則回傳 null。
+    /// 這通常代表前一個陳述式結尾漏了分號。<c>CREATE [OR REPLACE] RULE</c> 陳述式不檢查。回傳原文中的位置與關鍵字；沒有則回傳 null。
     /// </summary>
     public static (int Offset, string Keyword)? FindMissingTerminator(string sql)
     {
         foreach (var stmt in SplitStatements(sql))
         {
             var masked = stmt.Masked;
+            if (SkipTerminatorCheckPattern.IsMatch(masked))
+                continue;
             int depth = 0;
             bool lineStart = false;
 

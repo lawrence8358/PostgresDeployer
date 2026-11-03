@@ -386,10 +386,21 @@ All changes are detected automatically and applied in the correct order:
 > **Caution operations** — changes that could result in data loss or deployment failure (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT, creating a unique index on an existing table) are flagged with `[!]` warnings and require explicit confirmation before applying.
 >
 > **Blocked operations** — a `DROP VIEW ... CASCADE` that would also drop dependent views not defined in the schema directory is no longer just a caution: the whole deployment is blocked (`[BLOCKED]`, exit code 1) unless you opt in with `--allow-cascade-drop` / `"allowCascadeDrop": true`, in which case it is shown as a `[!]` caution. See [Blocked Deployments](#blocked-deployments-cascade-drop-outside-the-schema-directory).
+>
+> **Index comparison** — when an index in a SQL file is written differently from how PostgreSQL stores it (e.g. `IN (...)` in a partial-index `WHERE`, expression indexes), the analysis asks PostgreSQL to normalize it by creating the index on a temporary table inside a transaction that is then rolled back (nothing is left behind). This also happens during `--dry-run` / `diff`, so the database user needs the `TEMP` privilege; without it, the SQL text is compared as written and the index may be reported as `[~IDX]`. `CREATE INDEX CONCURRENTLY` in a SQL file is applied without `CONCURRENTLY`, because deployment groups run inside a transaction.
 
 ## Contributing
 
 See [docs/](docs/) for developer guides.
+
+To run the PostgreSQL integration tests, start a disposable container and set `PGD_TEST_CONNECTION` (without it these tests are reported as skipped):
+
+```bash
+docker run -d --name pgd-test-pg -e POSTGRES_PASSWORD=pgdtest -p 55432:5432 postgis/postgis:18-3.6
+PGD_TEST_CONNECTION="Host=localhost;Port=55432;Username=postgres;Password=pgdtest" dotnet test PostgresDeployer.sln
+```
+
+See [docs/dev-guide-getting-started.md](docs/dev-guide-getting-started.md) for details.
 
 ## License
 

@@ -198,6 +198,7 @@ public static class DeployCommand
                         ChangeType.AlterColumnComment => "[~CMT]  ",
                         ChangeType.CreateView => "[+VIEW] ",
                         ChangeType.ReplaceView => "[~VIEW] ",
+                        ChangeType.ExtendView => "[+VCOL] ",
                         ChangeType.CreateIndex => "[+IDX]  ",
                         ChangeType.RecreateIndex => "[~IDX]  ",
                         ChangeType.DropIndex => "[-IDX]  ",

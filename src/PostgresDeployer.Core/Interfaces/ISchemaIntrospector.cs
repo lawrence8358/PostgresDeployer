@@ -46,6 +46,15 @@ public interface ISchemaIntrospector
         IReadOnlyCollection<string> viewNames,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// 取得（遞迴）依賴指定資料表欄位的 public schema View，也就是 ALTER COLUMN TYPE / DROP COLUMN 前必須先 DROP 的 View
+    /// （否則 PostgreSQL 會拒絕：cannot alter type of a column used by a view or rule）。
+    /// Key 為 View 名稱，Value 為造成依賴的欄位顯示名稱（如 <c>"T"."C"</c>）；間接依賴的 View 沿用其上游 View 所依賴的欄位。
+    /// </summary>
+    Task<Dictionary<string, List<string>>> GetViewsDependingOnColumnsAsync(
+        IReadOnlyCollection<(string TableName, string ColumnName)> columns,
+        CancellationToken ct = default);
+
     /// <summary>測試資料庫連線是否正常</summary>
     Task<bool> TestConnectionAsync(CancellationToken ct = default);
 }

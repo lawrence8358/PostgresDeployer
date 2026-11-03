@@ -537,6 +537,73 @@ public class SchemaIntrospector : ISchemaIntrospector
         return result;
     }
 
+    public async Task<Dictionary<string, List<string>>> GetViewsDependingOnColumnsAsync(
+        IReadOnlyCollection<(string TableName, string ColumnName)> columns,
+        CancellationToken ct = default)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        if (columns.Count == 0)
+            return result;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        // 1. pg_depend（refobjid = 表 oid、refobjsubid = attnum、classid = pg_rewrite）→ pg_rewrite.ev_class：直接引用該欄位的 View
+        // 2. 再遞迴往上找依賴這些 View 的 View（DROP ... CASCADE 時也會一併刪除）
+        const string sql = """
+            WITH RECURSIVE cols(tbl, col) AS (
+                SELECT * FROM unnest(@tables::text[], @columns::text[])
+            ),
+            deps(objid, src) AS (
+                SELECT r.ev_class, '"' || cols.tbl || '"."' || cols.col || '"'
+                FROM cols
+                JOIN pg_class t      ON t.relname = cols.tbl AND t.relkind IN ('r', 'p')
+                JOIN pg_namespace tn ON tn.oid = t.relnamespace AND tn.nspname = 'public'
+                JOIN pg_attribute a  ON a.attrelid = t.oid AND a.attname = cols.col AND NOT a.attisdropped
+                JOIN pg_depend dep
+                  ON dep.refclassid  = 'pg_class'::regclass
+                 AND dep.refobjid    = t.oid
+                 AND dep.refobjsubid = a.attnum
+                 AND dep.classid     = 'pg_rewrite'::regclass
+                JOIN pg_rewrite r ON r.oid = dep.objid
+                WHERE r.ev_class <> t.oid
+                UNION
+                SELECT r.ev_class, d.src
+                FROM deps d
+                JOIN pg_depend dep
+                  ON dep.refclassid = 'pg_class'::regclass
+                 AND dep.refobjid   = d.objid
+                 AND dep.classid    = 'pg_rewrite'::regclass
+                JOIN pg_rewrite r ON r.oid = dep.objid
+                WHERE r.ev_class <> d.objid
+            )
+            SELECT DISTINCT c.relname::text, d.src
+            FROM deps d
+            JOIN pg_class c     ON c.oid = d.objid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind = 'v'
+            ORDER BY 1, 2
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@tables", columns.Select(c => c.TableName).ToArray());
+        cmd.Parameters.AddWithValue("@columns", columns.Select(c => c.ColumnName).ToArray());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        while (await reader.ReadAsync(ct))
+        {
+            var view = reader.GetString(0);
+            if (!result.TryGetValue(view, out var list))
+            {
+                list = [];
+                result[view] = list;
+            }
+            list.Add(reader.GetString(1));
+        }
+
+        return result;
+    }
+
     private static async Task ExecuteAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string sql, CancellationToken ct)
     {
         await using var cmd = new NpgsqlCommand(sql, conn, tx);

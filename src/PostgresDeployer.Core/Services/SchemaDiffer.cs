@@ -415,13 +415,27 @@ public class SchemaDiffer : ISchemaDiffer
                     continue;
                 }
 
-                bool columnsChanged =
-                    desiredCols.Count != existingCols.Count ||
-                    desiredCols.Zip(existingCols).Any(pair =>
-                        !string.Equals(pair.First, pair.Second, StringComparison.Ordinal));
+                // 既有欄位是期望欄位的前綴（名稱、順序皆不變）→ 只是在尾端新增欄位，
+                // PostgreSQL 允許直接 CREATE OR REPLACE VIEW，不需 DROP（不會 CASCADE 刪到依賴此 View 的物件）
+                bool isPrefix =
+                    desiredCols.Count >= existingCols.Count &&
+                    existingCols.Zip(desiredCols).All(pair =>
+                        string.Equals(pair.First, pair.Second, StringComparison.Ordinal));
 
-                if (columnsChanged)
+                if (isPrefix && desiredCols.Count > existingCols.Count)
                 {
+                    var addedCols = desiredCols.Skip(existingCols.Count).Select(c => $"\"{c}\"");
+                    changes.Add(new SchemaChange
+                    {
+                        Type = ChangeType.ExtendView,
+                        EntityName = viewName,
+                        Description = CoreStrings.Format("Diff_ExtendView", viewName, string.Join(", ", addedCols)),
+                        Sql = sqlContent
+                    });
+                }
+                else if (!isPrefix)
+                {
+                    // 欄位改名、刪除、改順序或在中間插入 → CREATE OR REPLACE 會失敗（42P16），需先 DROP
                     changes.Add(new SchemaChange
                     {
                         Type = ChangeType.ReplaceView,

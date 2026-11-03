@@ -408,8 +408,13 @@ public class DeployOrchestrator : IDeployOrchestrator
 
         if (createGroup.Statements.Count > 0) plan.Groups.Add(createGroup);
 
+        // schema 目錄中依賴「本次要變更型別／刪除之欄位」的 View 也必須 Pre-Drop（轉為 ReplaceView），
+        // 否則 ALTER TABLE 會被 PG 拒絕：cannot alter type of a column used by a view or rule
+        await MarkColumnDependentViewsForReplaceAsync(introspector, changes, desiredViews, viewChanges, ct);
+
         // 對於需要取代的 View（ReplaceView），在 Table 變更執行前先 DROP，
-        // 避免 PG 拒絕：(1) 欄位型別變更時的依賴鎖定，(2) CREATE OR REPLACE 無法改變欄位定義（42P16）
+        // 避免 PG 拒絕：(1) 欄位型別變更／刪除時的依賴鎖定，(2) CREATE OR REPLACE 無法改變欄位定義（42P16）。
+        // 只在尾端新增欄位的 View（ExtendView）不需 DROP，由 Views 群組直接 CREATE OR REPLACE。
         var replaceViewChanges = viewChanges.Where(c => c.Type == ChangeType.ReplaceView).ToList();
         if (replaceViewChanges.Count > 0)
         {
@@ -565,6 +570,75 @@ public class DeployOrchestrator : IDeployOrchestrator
         {
             _logger.LogWarning(ex, "Failed to canonicalize index definitions, comparing SQL text as written");
         }
+    }
+
+    /// <summary>
+    /// 找出 schema 目錄中（遞迴）依賴本次 AlterColumnType / DropColumn 欄位的 View，
+    /// 將其變更改為（或新增一筆）ReplaceView，讓它在 Table Changes 前被 Pre-Drop、之後由 Views 群組重建。
+    /// 不在 schema 目錄中的 View 不處理（ALTER 會明確失敗，不會默默刪除）。
+    /// </summary>
+    private async Task MarkColumnDependentViewsForReplaceAsync(
+        SchemaIntrospector introspector,
+        List<SchemaChange> tableChanges,
+        List<(string ViewName, string SqlContent)> desiredViews,
+        List<SchemaChange> viewChanges,
+        CancellationToken ct)
+    {
+        var columns = tableChanges
+            .Where(c => (c.Type is ChangeType.AlterColumnType or ChangeType.DropColumn) && c.ColumnName != null)
+            .Select(c => (c.EntityName, c.ColumnName!))
+            .Distinct()
+            .ToList();
+        if (columns.Count == 0 || desiredViews.Count == 0)
+            return;
+
+        var dependents = await introspector.GetViewsDependingOnColumnsAsync(columns, ct);
+        if (dependents.Count == 0)
+            return;
+
+        foreach (var (viewName, sqlContent) in desiredViews)
+        {
+            if (!dependents.TryGetValue(viewName, out var dependedColumns))
+                continue;
+
+            var existing = viewChanges.FirstOrDefault(
+                c => string.Equals(c.EntityName, viewName, StringComparison.Ordinal));
+            if (existing?.Type == ChangeType.ReplaceView)
+                continue; // 原本就會 Pre-Drop
+
+            var description = CoreStrings.Format(
+                "Diff_ReplaceView_DependsOnColumn", viewName, string.Join(", ", dependedColumns));
+
+            if (existing != null)
+            {
+                // 例如 ExtendView：改為 ReplaceView，不重複新增
+                existing.Type = ChangeType.ReplaceView;
+                existing.Description = description;
+            }
+            else
+            {
+                viewChanges.Add(new SchemaChange
+                {
+                    Type = ChangeType.ReplaceView,
+                    EntityName = viewName,
+                    Description = description,
+                    Sql = sqlContent
+                });
+            }
+
+            _logger.LogInformation(
+                "View \"{View}\" depends on column(s) {Columns} that will change type or be dropped — it will be dropped before table changes and recreated",
+                viewName, string.Join(", ", dependedColumns));
+        }
+
+        // 新增的項目排回 schema 目錄的檔案順序，讓顯示順序與 Views 群組一致
+        var order = desiredViews
+            .Select((v, i) => (v.ViewName, i))
+            .DistinctBy(x => x.ViewName)
+            .ToDictionary(x => x.ViewName, x => x.i, StringComparer.Ordinal);
+        var sorted = viewChanges.OrderBy(c => order.GetValueOrDefault(c.EntityName, int.MaxValue)).ToList();
+        viewChanges.Clear();
+        viewChanges.AddRange(sorted);
     }
 
     /// <summary>

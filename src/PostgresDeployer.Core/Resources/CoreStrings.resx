@@ -82,6 +82,8 @@
   <data name="Diff_RecreateIndex" xml:space="preserve"><value>Recreate index "{0}" (definition changed)</value></data>
   <data name="Diff_DropIndex" xml:space="preserve"><value>Drop index "{0}" (not in SQL definition)</value></data>
   <data name="Diff_CreateView" xml:space="preserve"><value>Create view "{0}" (new)</value></data>
+  <data name="Diff_ExtendView" xml:space="preserve"><value>Extend view "{0}": add column(s) {1} (CREATE OR REPLACE, no drop)</value></data>
+  <data name="Diff_ReplaceView_DependsOnColumn" xml:space="preserve"><value>Replace view "{0}" (drop and recreate; it depends on column(s) {1} whose type will change or which will be dropped)</value></data>
   <data name="Diff_ReplaceView" xml:space="preserve"><value>Replace view "{0}" (drop and recreate)</value></data>
   <data name="Diff_UniqueIndex_Caution" xml:space="preserve"><value>Warning: unique index "{0}" will be created on an existing table — deployment will fail if existing rows contain duplicate keys</value></data>
   <data name="Diff_ReplaceView_CascadeCaution" xml:space="preserve"><value>Warning: DROP VIEW "{0}" CASCADE will also drop dependent object(s) that are NOT defined in the schema directory and will not be recreated: {1}</value></data>

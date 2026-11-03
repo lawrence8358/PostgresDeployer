@@ -356,7 +356,8 @@ All changes are detected automatically and applied in the correct order:
 | `[~PK]` | Recreate Primary Key | Primary key definition changed |
 | `[~CMT]` | Alter Comment | `COMMENT ON TABLE` / `COMMENT ON COLUMN` changed |
 | `[+VIEW]` | Create View | View not yet in the database |
-| `[~VIEW]` | Replace View | View column list changed (`DROP VIEW ... CASCADE` before table changes, then recreate) |
+| `[+VCOL]` | Extend View | Columns only appended to the end of an existing view (existing column names and order unchanged) — applied directly with `CREATE OR REPLACE VIEW`, no drop |
+| `[~VIEW]` | Replace View | View columns renamed, removed, reordered or inserted in the middle, or the view depends on a table column whose type will change or which will be dropped (`DROP VIEW ... CASCADE` before table changes, then recreate) |
 
 > **Caution operations** — changes that could result in data loss or deployment failure (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT, creating a unique index on an existing table, `DROP VIEW ... CASCADE` that would also drop dependent views not defined in the schema directory) are flagged with `[!]` warnings and require explicit confirmation before applying.
 

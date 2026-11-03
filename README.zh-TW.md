@@ -350,12 +350,15 @@ WPF 應用程式提供互動式的 Schema 部署與管理介面，與指令列�
 | `[~NULL]` | 變更 Nullable | NULL / NOT NULL 條件約束改變 |
 | `[~DFLT]` | 變更預設值 | DEFAULT 值改變或移除 |
 | `[+IDX]` | 建立索引 | 新增的索引 |
-| `[~IDX]` | 重建索引 | 索引定義改變（先 DROP 再 CREATE）|
+| `[~IDX]` | 重建索引 | 索引定義改變：欄位、排序、`UNIQUE`、`USING`、`INCLUDE` 或部分索引的 `WHERE` 條件（先 DROP 再 CREATE）|
 | `[-IDX]` | 刪除索引 | 定義中已移除的索引 |
 | `[-COL]` | 刪除欄位 | 定義中已移除的欄位 |
 | `[~PK]` | 重建主鍵 | 主鍵定義已改變 |
+| `[~CMT]` | 變更註解 | `COMMENT ON TABLE` / `COMMENT ON COLUMN` 改變 |
+| `[+VIEW]` | 建立視圖 | DB 中尚不存在的 View |
+| `[~VIEW]` | 取代視圖 | View 欄位清單改變（於資料表變更前 `DROP VIEW ... CASCADE`，之後重建）|
 
-> **Caution 操作** — 可能造成資料遺失的變更（刪除欄位、主鍵變更、型別縮減、在無預設值的情況下加入 NOT NULL）會以 `[!]` 警告標示，需明確確認後才會套用。
+> **Caution 操作** — 可能造成資料遺失或部署失敗的變更（刪除欄位、主鍵變更、型別縮減、在無預設值的情況下加入 NOT NULL、在既有資料表建立唯一索引、`DROP VIEW ... CASCADE` 會連帶刪除不在 schema 目錄中的相依 View）會以 `[!]` 警告標示，需明確確認後才會套用。
 
 ## 開發者文件
 

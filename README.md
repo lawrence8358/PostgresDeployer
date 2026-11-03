@@ -350,12 +350,15 @@ All changes are detected automatically and applied in the correct order:
 | `[~NULL]` | Alter Column Nullable | NULL / NOT NULL constraint changed |
 | `[~DFLT]` | Alter Column Default | DEFAULT value changed or removed |
 | `[+IDX]` | Create Index | New index defined |
-| `[~IDX]` | Recreate Index | Index definition changed (drop + recreate) |
+| `[~IDX]` | Recreate Index | Index definition changed — columns, sort order, `UNIQUE`, `USING`, `INCLUDE` or partial-index `WHERE` (drop + recreate) |
 | `[-IDX]` | Drop Index | Index removed from definition |
 | `[-COL]` | Drop Column | Column removed from definition |
 | `[~PK]` | Recreate Primary Key | Primary key definition changed |
+| `[~CMT]` | Alter Comment | `COMMENT ON TABLE` / `COMMENT ON COLUMN` changed |
+| `[+VIEW]` | Create View | View not yet in the database |
+| `[~VIEW]` | Replace View | View column list changed (`DROP VIEW ... CASCADE` before table changes, then recreate) |
 
-> **Caution operations** — changes that could result in data loss (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT) are flagged with `[!]` warnings and require explicit confirmation before applying.
+> **Caution operations** — changes that could result in data loss or deployment failure (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT, creating a unique index on an existing table, `DROP VIEW ... CASCADE` that would also drop dependent views not defined in the schema directory) are flagged with `[!]` warnings and require explicit confirmation before applying.
 
 ## Contributing
 

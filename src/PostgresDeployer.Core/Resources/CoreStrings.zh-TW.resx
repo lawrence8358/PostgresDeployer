@@ -83,6 +83,11 @@
   <data name="Diff_DropIndex" xml:space="preserve"><value>刪除索引 "{0}"（SQL 定義檔已移除）</value></data>
   <data name="Diff_CreateView" xml:space="preserve"><value>建立新視圖 "{0}"（首次建立）</value></data>
   <data name="Diff_ReplaceView" xml:space="preserve"><value>取代視圖 "{0}"（刪除後重建）</value></data>
+  <data name="Diff_UniqueIndex_Caution" xml:space="preserve"><value>注意：將在既有資料表建立唯一索引 "{0}"，若現有資料有重複鍵，部署會失敗</value></data>
+  <data name="Diff_ReplaceView_CascadeCaution" xml:space="preserve"><value>注意：DROP VIEW "{0}" CASCADE 會連帶刪除「不在 schema 目錄中」的相依物件，部署後不會重建：{1}</value></data>
+  <data name="Parse_MissingSemicolon" xml:space="preserve"><value>第 {0} 行：此處開始了新的陳述式（{1}），但前一個陳述式結尾缺少分號 ';'</value></data>
+  <data name="Deploy_FailedAt" xml:space="preserve"><value>失敗位置：{0}</value></data>
+  <data name="Deploy_FailedAtLine" xml:space="preserve"><value>失敗位置：{0}（第 {1} 行）</value></data>
   <data name="Diff_AddFK" xml:space="preserve"><value>新增外鍵 "{0}" ({1}) → "{2}"</value></data>
   <data name="Diff_DropFK" xml:space="preserve"><value>刪除外鍵 "{0}"（SQL 定義檔已移除）</value></data>
   <data name="Diff_DropFK_Caution" xml:space="preserve"><value>警告：刪除外鍵 "{0}" 將移除參照完整性約束</value></data>

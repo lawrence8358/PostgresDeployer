@@ -70,7 +70,18 @@ public class DeployOrchestrator : IDeployOrchestrator
                     procedureFiles.Add((fileName, content));
                     break;
                 case Models.SchemaFileType.Table:
-                    desiredTables.Add(parser.ParseTableSql(content));
+                    TableSchema table;
+                    try
+                    {
+                        table = parser.ParseTableSql(content);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        // 附上檔名，方便定位是哪個 SQL 檔有問題
+                        throw new InvalidOperationException($"{fileName}: {ex.Message}", ex);
+                    }
+                    table.SourceFile = fileName;
+                    desiredTables.Add(table);
                     break;
                 case Models.SchemaFileType.View:
                     viewFiles.Add((fileName, content));
@@ -160,6 +171,8 @@ public class DeployOrchestrator : IDeployOrchestrator
             actualTables.Count, existingViewColumns.Count);
 
         // ═══ Phase 3: 差異比對 ═══
+        await CanonicalizeIndexesAsync(introspector, desiredTables, actualTables, ct);
+
         _logger.LogInformation("Computing schema differences...");
         var changes = differ.ComputeChanges(desiredTables, actualTables);
 
@@ -201,6 +214,8 @@ public class DeployOrchestrator : IDeployOrchestrator
             {
                 case ChangeType.CreateTable:
                     createGroup.Statements.Add(change.Sql!);
+                    createGroup.StatementLabels.Add(
+                        StripFirstSegment(tableMap[change.EntityName].SourceFile ?? change.EntityName));
                     createGroup.Changes.Add(change);
                     break;
 
@@ -294,46 +309,29 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.CreateIndex:
                 {
-                    if (!tableMap.TryGetValue(change.EntityName, out var table))
-                        break;
-                    var idxDef = table.Indexes.FirstOrDefault(i =>
-                        change.Description.Contains(i.Name));
-                    if (idxDef != null)
-                    {
-                        change.Sql = generator.GenerateCreateIndex(change.EntityName, idxDef);
-                        indexGroup.Statements.Add(change.Sql);
-                        indexGroup.Changes.Add(change);
-                    }
+                    var idxDef = FindIndex(tableMap, change);
+                    change.Sql = generator.GenerateCreateIndex(change.EntityName, idxDef);
+                    indexGroup.Statements.Add(change.Sql);
+                    indexGroup.Changes.Add(change);
                     break;
                 }
 
                 case ChangeType.RecreateIndex:
                 {
-                    if (!tableMap.TryGetValue(change.EntityName, out var table))
-                        break;
-                    var idxDef = table.Indexes.FirstOrDefault(i =>
-                        change.Description.Contains(i.Name));
-                    if (idxDef != null)
-                    {
-                        indexGroup.Statements.Add(generator.GenerateDropIndex(idxDef.Name));
-                        indexGroup.Statements.Add(
-                            generator.GenerateCreateIndex(change.EntityName, idxDef));
-                        indexGroup.Changes.Add(change);
-                    }
+                    var idxDef = FindIndex(tableMap, change);
+                    indexGroup.Statements.Add(generator.GenerateDropIndex(idxDef.Name));
+                    change.Sql = generator.GenerateCreateIndex(change.EntityName, idxDef);
+                    indexGroup.Statements.Add(change.Sql);
+                    indexGroup.Changes.Add(change);
                     break;
                 }
 
                 case ChangeType.DropIndex:
                 {
-                    var dropIdxName = actualTables.Values
-                        .SelectMany(t => t.Indexes)
-                        .FirstOrDefault(i => change.Description.Contains(i.Name))?.Name;
-                    if (dropIdxName != null)
-                    {
-                        change.Sql = generator.GenerateDropIndex(dropIdxName);
-                        indexGroup.Statements.Add(change.Sql);
-                        indexGroup.Changes.Add(change);
-                    }
+                    var dropIdx = FindIndex(actualTables, change);
+                    change.Sql = generator.GenerateDropIndex(dropIdx.Name);
+                    indexGroup.Statements.Add(change.Sql);
+                    indexGroup.Changes.Add(change);
                     break;
                 }
 
@@ -415,6 +413,10 @@ public class DeployOrchestrator : IDeployOrchestrator
         var replaceViewChanges = viewChanges.Where(c => c.Type == ChangeType.ReplaceView).ToList();
         if (replaceViewChanges.Count > 0)
         {
+            await AddCascadeDropCautionsAsync(
+                introspector, replaceViewChanges, desiredViews.Select(v => v.ViewName), ct);
+            plan.Cautions.AddRange(replaceViewChanges.Where(c => c.CautionMessage != null));
+
             var dropViewsGroup = new DeployGroup { Name = "Drop Views (Pre-Alter)" };
 
             // 倒序 Drop，減少視圖間相依性衝突（CASCADE 會自動處理剩餘依賴）
@@ -509,6 +511,94 @@ public class DeployOrchestrator : IDeployOrchestrator
             successCount, failCount);
 
         return results;
+    }
+
+    /// <summary>
+    /// 依 SchemaChange 的索引名稱（ColumnName）精確取得索引定義。
+    /// 不可用 Description 子字串比對：名稱互為子字串時（IX_X ⊂ UIX_X_...）會取到錯誤的索引。
+    /// </summary>
+    private static IndexDefinition FindIndex(IReadOnlyDictionary<string, TableSchema> tables, SchemaChange change)
+    {
+        if (!tables.TryGetValue(change.EntityName, out var table))
+            throw new InvalidOperationException(
+                $"Diff produced a change for non-existent table: {change.EntityName}");
+        return table.Indexes.FirstOrDefault(i => string.Equals(i.Name, change.ColumnName, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException(
+                $"Index not found in table {change.EntityName}: {change.ColumnName}");
+    }
+
+    /// <summary>
+    /// SQL 檔與資料庫寫法不同的同名索引（WHERE 條件、運算式欄位），先請 PostgreSQL 正規化 SQL 檔中的定義再比對，
+    /// 避免每次部署都誤判為「定義已變更」而重建索引。
+    /// </summary>
+    private async Task CanonicalizeIndexesAsync(
+        SchemaIntrospector introspector,
+        List<TableSchema> desiredTables,
+        Dictionary<string, TableSchema> actualTables,
+        CancellationToken ct)
+    {
+        var candidates = new List<(string TableName, IndexDefinition Index)>();
+        foreach (var table in desiredTables)
+        {
+            if (!actualTables.TryGetValue(table.TableName, out var actualTable))
+                continue;
+
+            foreach (var idx in table.Indexes)
+            {
+                var actualIdx = actualTable.Indexes.FirstOrDefault(
+                    i => string.Equals(i.Name, idx.Name, StringComparison.Ordinal));
+                if (actualIdx == null || SchemaDiffer.IndexesMatch(idx, actualIdx))
+                    continue;
+                if (idx.Predicate != null || actualIdx.Predicate != null || idx.Columns.Any(c => c.IsExpression))
+                    candidates.Add((table.TableName, idx));
+            }
+        }
+
+        if (candidates.Count == 0)
+            return;
+
+        try
+        {
+            await introspector.CanonicalizeIndexesAsync(candidates, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Failed to canonicalize index definitions, comparing SQL text as written");
+        }
+    }
+
+    /// <summary>
+    /// Pre-Alter 的 DROP VIEW ... CASCADE 會連帶刪除依賴該 View 的物件；
+    /// 其中不在 schema 目錄中的物件部署後不會重建，需列為注意事項。
+    /// </summary>
+    private async Task AddCascadeDropCautionsAsync(
+        SchemaIntrospector introspector,
+        List<SchemaChange> replaceViewChanges,
+        IEnumerable<string> desiredViewNames,
+        CancellationToken ct)
+    {
+        var desired = desiredViewNames
+            .Select(v => $"\"{v}\" (view)")
+            .ToHashSet(StringComparer.Ordinal);
+
+        var dependents = await introspector.GetViewDependentsAsync(
+            replaceViewChanges.Select(c => c.EntityName).ToList(), ct);
+
+        foreach (var change in replaceViewChanges)
+        {
+            if (!dependents.TryGetValue(change.EntityName, out var list))
+                continue;
+
+            var lost = list.Where(d => !desired.Contains(d)).ToList();
+            if (lost.Count == 0)
+                continue;
+
+            change.CautionMessage = CoreStrings.Format(
+                "Diff_ReplaceView_CascadeCaution", change.EntityName, string.Join(", ", lost));
+            _logger.LogWarning(
+                "DROP VIEW \"{View}\" CASCADE will drop object(s) not in the schema directory: {Objects}",
+                change.EntityName, string.Join(", ", lost));
+        }
     }
 
     private static readonly Regex FkReferencesPattern = new(

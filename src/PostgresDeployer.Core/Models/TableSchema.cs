@@ -33,4 +33,9 @@ public class TableSchema
     /// 僅在從 SQL 檔案解析時有值，DB 內省時為 null。
     /// </summary>
     public string? RawSql { get; set; }
+
+    /// <summary>
+    /// 來源 SQL 檔案（相對於 schema 目錄的路徑），用於錯誤訊息定位。DB 內省時為 null。
+    /// </summary>
+    public string? SourceFile { get; set; }
 }

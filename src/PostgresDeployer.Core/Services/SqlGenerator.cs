@@ -59,12 +59,29 @@ public class SqlGenerator : ISqlGenerator
 
     public string GenerateCreateIndex(string tableName, IndexDefinition index)
     {
+        // 來自 SQL 定義檔的索引：原樣執行，保留 WHERE / INCLUDE / WITH / opclass 等所有子句
+        if (!string.IsNullOrWhiteSpace(index.Definition))
+        {
+            var definition = index.Definition.TrimEnd();
+            return definition.EndsWith(';') ? definition : definition + ";";
+        }
+
         var unique = index.IsUnique ? "UNIQUE " : "";
+        var method = string.IsNullOrEmpty(index.Method) || index.Method.Equals("btree", StringComparison.OrdinalIgnoreCase)
+            ? ""
+            : $" USING {index.Method}";
         var cols = string.Join(", ",
             index.Columns.Select(c =>
-                $"\"{c.Name}\"{(c.IsDescending ? " DESC" : "")}"));
+                $"{(c.IsExpression ? c.Name : $"\"{c.Name}\"")}{(c.IsDescending ? " DESC" : "")}"));
 
-        return $"CREATE {unique}INDEX IF NOT EXISTS \"{index.Name}\" ON \"{tableName}\" ({cols});";
+        var sb = new StringBuilder();
+        sb.Append($"CREATE {unique}INDEX IF NOT EXISTS \"{index.Name}\" ON \"{tableName}\"{method} ({cols})");
+        if (index.IncludeColumns.Count > 0)
+            sb.Append($" INCLUDE ({string.Join(", ", index.IncludeColumns.Select(c => $"\"{c}\""))})");
+        if (!string.IsNullOrWhiteSpace(index.Predicate))
+            sb.Append($" WHERE {index.Predicate}");
+        sb.Append(';');
+        return sb.ToString();
     }
 
     public string GenerateDropIndex(string indexName)

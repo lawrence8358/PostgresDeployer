@@ -11,7 +11,7 @@ public class SchemaChange
     /// <summary>影響的實體名稱（資料表名稱或 View 名稱，依 <see cref="Type"/> 決定）</summary>
     public string EntityName { get; set; } = "";
 
-    /// <summary>影響的欄位名稱（若適用）</summary>
+    /// <summary>影響的欄位名稱（若適用）；索引、外鍵變更時為索引名稱或約束名稱</summary>
     public string? ColumnName { get; set; }
 
     /// <summary>變更的人類可讀描述（繁體中文）</summary>

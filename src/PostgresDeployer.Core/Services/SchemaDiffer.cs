@@ -235,13 +235,20 @@ public class SchemaDiffer : ISchemaDiffer
 
         foreach (var desiredIdx in desired.Indexes)
         {
+            // 唯一索引建在既有資料表上：若現有資料有重複鍵，建立時會失敗
+            var uniqueCaution = desiredIdx.IsUnique
+                ? CoreStrings.Format("Diff_UniqueIndex_Caution", desiredIdx.Name)
+                : null;
+
             if (!actualIdxMap.TryGetValue(desiredIdx.Name, out var actualIdx))
             {
                 changes.Add(new SchemaChange
                 {
                     Type = ChangeType.CreateIndex,
                     EntityName = desired.TableName,
-                    Description = CoreStrings.Format("Diff_CreateIndex", desiredIdx.Name)
+                    ColumnName = desiredIdx.Name,
+                    Description = CoreStrings.Format("Diff_CreateIndex", desiredIdx.Name),
+                    CautionMessage = uniqueCaution
                 });
             }
             else if (!IndexesMatch(desiredIdx, actualIdx))
@@ -250,7 +257,9 @@ public class SchemaDiffer : ISchemaDiffer
                 {
                     Type = ChangeType.RecreateIndex,
                     EntityName = desired.TableName,
-                    Description = CoreStrings.Format("Diff_RecreateIndex", desiredIdx.Name)
+                    ColumnName = desiredIdx.Name,
+                    Description = CoreStrings.Format("Diff_RecreateIndex", desiredIdx.Name),
+                    CautionMessage = uniqueCaution
                 });
             }
         }
@@ -264,22 +273,41 @@ public class SchemaDiffer : ISchemaDiffer
                 {
                     Type = ChangeType.DropIndex,
                     EntityName = desired.TableName,
+                    ColumnName = actualIdx.Name,
                     Description = CoreStrings.Format("Diff_DropIndex", actualIdx.Name)
                 });
             }
         }
     }
 
-    private static bool IndexesMatch(IndexDefinition a, IndexDefinition b)
+    /// <summary>
+    /// 比對兩個索引定義是否相同（唯一性、存取方法、欄位與排序、INCLUDE 欄位、WHERE 條件）。
+    /// </summary>
+    public static bool IndexesMatch(IndexDefinition a, IndexDefinition b)
     {
         if (a.IsUnique != b.IsUnique) return false;
+        if (!string.Equals(NormalizeMethod(a.Method), NormalizeMethod(b.Method), StringComparison.Ordinal)) return false;
         if (a.Columns.Count != b.Columns.Count) return false;
         for (int i = 0; i < a.Columns.Count; i++)
         {
-            if (a.Columns[i].Name != b.Columns[i].Name) return false;
+            if (!IndexItemsMatch(a.Columns[i].Name, a.Columns[i].IsExpression, b.Columns[i].Name, b.Columns[i].IsExpression))
+                return false;
             if (a.Columns[i].IsDescending != b.Columns[i].IsDescending) return false;
         }
-        return true;
+        if (a.IncludeColumns.Count != b.IncludeColumns.Count) return false;
+        for (int i = 0; i < a.IncludeColumns.Count; i++)
+        {
+            if (!string.Equals(a.IncludeColumns[i], b.IncludeColumns[i], StringComparison.Ordinal)) return false;
+        }
+        return IndexExpressionNormalizer.FragmentsEqual(a.Predicate, b.Predicate);
+
+        static string NormalizeMethod(string? m) =>
+            string.IsNullOrEmpty(m) ? "btree" : m.ToLowerInvariant();
+
+        static bool IndexItemsMatch(string a, bool aExpr, string b, bool bExpr) =>
+            !aExpr && !bExpr
+                ? string.Equals(a, b, StringComparison.Ordinal)
+                : IndexExpressionNormalizer.FragmentsEqual(a, b);
     }
 
     private void CompareForeignKeys(TableSchema desired, TableSchema actual, List<SchemaChange> changes)

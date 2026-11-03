@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using PostgresDeployer.Core.Helpers;
 using PostgresDeployer.Core.Interfaces;
 using PostgresDeployer.Core.Models;
+using PostgresDeployer.Core.Resources;
 
 /// <summary>
 /// SQL 檔案解析器。
@@ -15,8 +16,21 @@ public class SqlFileParser : ISqlFileParser
         @"CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?""([^""]+)""",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    private static readonly Regex IndexPattern = new(
-        @"CREATE\s+(UNIQUE\s+)?INDEX\s+(IF\s+NOT\s+EXISTS\s+)?""([^""]+)""\s+ON\s+(?:[a-zA-Z_]\w*\.)?""([^""]+)""\s*\(([^)]+)\)",
+    /// <summary>
+    /// CREATE INDEX 陳述式開頭（至欄位清單左括號為止）。套用於已切割好的單一陳述式。
+    /// </summary>
+    private static readonly Regex IndexHeaderPattern = new(
+        @"^CREATE\s+(?<unique>UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?""(?<name>[^""]+)""\s+ON\s+(?:ONLY\s+)?(?:(?:""[^""]+""|\w+)\s*\.\s*)?""(?<table>[^""]+)""\s*(?:USING\s+(?<method>\w+)\s*)?\(",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex IndexIncludePattern = new(
+        @"^\s*INCLUDE\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex IndexWherePattern = new(
+        @"\bWHERE\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex IndexSortSuffixPattern = new(
+        @"\s+(?<dir>ASC|DESC)(?:\s+NULLS\s+(?:FIRST|LAST))?\s*$|\s+NULLS\s+(?:FIRST|LAST)\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex ColumnNamePattern = new(
@@ -89,6 +103,17 @@ public class SqlFileParser : ISqlFileParser
     {
         var schema = new TableSchema { RawSql = sql };
 
+        // ═══ Step 0: 檢查陳述式是否漏了結尾分號 ═══
+        // 表檔案整份以單一 command 執行，漏分號時 PostgreSQL 只會回報 syntax error，難以定位。
+        var missing = SqlTextScanner.FindMissingTerminator(sql);
+        if (missing != null)
+        {
+            throw new InvalidOperationException(CoreStrings.Format(
+                "Parse_MissingSemicolon",
+                SqlTextScanner.GetLineNumber(sql, missing.Value.Offset),
+                missing.Value.Keyword));
+        }
+
         // ═══ Step 1: 擷取表名 ═══
         var tableMatch = TableNamePattern.Match(sql);
         if (!tableMatch.Success)
@@ -139,22 +164,12 @@ public class SqlFileParser : ISqlFileParser
             }
         }
 
-        // ═══ Step 5: 解析 CREATE INDEX ═══
-        var closeParenIndex = openParenIndex + bodyContent.Length + 2; // +2 for the parens
-        var afterTable = closeParenIndex < sql.Length ? sql[closeParenIndex..] : "";
-
-        foreach (Match idxMatch in IndexPattern.Matches(afterTable))
+        // ═══ Step 5: 解析 CREATE INDEX（逐陳述式，忽略註解內容）═══
+        foreach (var stmt in SqlTextScanner.SplitStatements(sql))
         {
-            var isUnique = idxMatch.Groups[1].Success;
-            var indexName = idxMatch.Groups[3].Value;
-            var indexCols = ParseIndexColumns(idxMatch.Groups[5].Value);
-
-            schema.Indexes.Add(new IndexDefinition
-            {
-                Name = indexName,
-                IsUnique = isUnique,
-                Columns = indexCols
-            });
+            var index = ParseIndexStatement(stmt);
+            if (index != null)
+                schema.Indexes.Add(index);
         }
 
         ParseComments(sql, schema);
@@ -485,25 +500,87 @@ public class SqlFileParser : ISqlFileParser
     }
 
     /// <summary>
+    /// 解析單一 CREATE INDEX 陳述式；非索引陳述式回傳 null。
+    /// </summary>
+    private static IndexDefinition? ParseIndexStatement(SqlStatement stmt)
+    {
+        var header = IndexHeaderPattern.Match(stmt.Text);
+        if (!header.Success)
+            return null;
+
+        var openParen = header.Index + header.Length - 1;
+        var closeParen = SqlTextScanner.FindMatchingParen(stmt.Masked, openParen);
+        if (closeParen < 0)
+            throw new InvalidOperationException(
+                $"索引 \"{header.Groups["name"].Value}\" 的欄位清單缺少右括號。");
+
+        var index = new IndexDefinition
+        {
+            Name = header.Groups["name"].Value,
+            IsUnique = header.Groups["unique"].Success,
+            Method = header.Groups["method"].Success
+                ? header.Groups["method"].Value.ToLowerInvariant()
+                : "btree",
+            Columns = ParseIndexColumns(
+                stmt.Text[(openParen + 1)..closeParen],
+                stmt.Masked[(openParen + 1)..closeParen]),
+            Definition = stmt.Text,
+        };
+
+        // 欄位清單之後：[INCLUDE (...)] [NULLS [NOT] DISTINCT] [WITH (...)] [TABLESPACE x] [WHERE predicate]
+        var restStart = closeParen + 1;
+        var restMasked = stmt.Masked[restStart..];
+
+        var include = IndexIncludePattern.Match(restMasked);
+        if (include.Success)
+        {
+            var incOpen = restStart + include.Index + include.Length - 1;
+            var incClose = SqlTextScanner.FindMatchingParen(stmt.Masked, incOpen);
+            if (incClose > incOpen)
+            {
+                index.IncludeColumns = SqlTextScanner
+                    .SplitTopLevelCommas(stmt.Text[(incOpen + 1)..incClose], stmt.Masked[(incOpen + 1)..incClose])
+                    .Select(c => IndexExpressionNormalizer.ParseColumnToken(c.Text).Name)
+                    .ToList();
+            }
+        }
+
+        var where = IndexWherePattern.Match(restMasked);
+        if (where.Success)
+        {
+            var predicate = stmt.Text[(restStart + where.Index + where.Length)..].Trim();
+            if (predicate.Length > 0)
+                index.Predicate = predicate;
+        }
+
+        return index;
+    }
+
+    /// <summary>
     /// 解析索引欄位清單。
     /// </summary>
-    private static List<IndexColumn> ParseIndexColumns(string columnsText)
+    private static List<IndexColumn> ParseIndexColumns(string columnsText, string columnsMasked)
     {
-        return columnsText.Split(',')
-            .Select(c =>
-            {
-                var trimmed = c.Trim();
-                var isDesc = trimmed.EndsWith(" DESC", StringComparison.OrdinalIgnoreCase);
-                var name = trimmed
-                    .Replace(" DESC", "", StringComparison.OrdinalIgnoreCase)
-                    .Replace(" ASC", "", StringComparison.OrdinalIgnoreCase)
-                    .Trim()
-                    .Trim('"');
+        var result = new List<IndexColumn>();
+        foreach (var (text, masked) in SqlTextScanner.SplitTopLevelCommas(columnsText, columnsMasked))
+        {
+            var item = text;
+            var isDesc = false;
 
-                return new IndexColumn { Name = name, IsDescending = isDesc };
-            })
-            .Where(c => c.Name.Length > 0)
-            .ToList();
+            // 以遮蔽後文字判斷排序修飾詞，避免誤判引號內的 DESC
+            var sortSuffix = IndexSortSuffixPattern.Match(masked);
+            if (sortSuffix.Success)
+            {
+                isDesc = sortSuffix.Groups["dir"].Value.Equals("DESC", StringComparison.OrdinalIgnoreCase);
+                item = text[..sortSuffix.Index].Trim();
+            }
+
+            var (name, isExpression) = IndexExpressionNormalizer.ParseColumnToken(item);
+            if (name.Length == 0) continue;
+
+            result.Add(new IndexColumn { Name = name, IsDescending = isDesc, IsExpression = isExpression });
+        }
+        return result;
     }
 
     private static void ParseComments(string sql, TableSchema schema)

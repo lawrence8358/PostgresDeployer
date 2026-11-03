@@ -22,8 +22,16 @@ public partial class DeployViewModel : ObservableObject
     [ObservableProperty] private string statusText = LocalizationService.Instance["Status_Ready"];
     [ObservableProperty] private bool isDeploying;
     [ObservableProperty] private bool canDeploy;
-    [ObservableProperty] private bool isBlocked;
-    [ObservableProperty] private string blockedText = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BlockedText))]
+    private bool isBlocked;
+
+    /// <summary>
+    /// 阻擋提示（醒目橫幅與分析完成時的狀態列共用此來源），由 <see cref="IsBlocked"/> 與目前的部署計畫推導。
+    /// </summary>
+    public string BlockedText => IsBlocked && _currentPlan != null
+        ? string.Format(LocalizationService.Instance["Status_AnalyzeBlocked"], _currentPlan.Blockers.Count)
+        : "";
 
     private bool _isAnalyzing;
 
@@ -76,7 +84,6 @@ public partial class DeployViewModel : ObservableObject
         SelectedSql = "";
         CanDeploy = false;
         IsBlocked = false;
-        BlockedText = "";
 
         try
         {
@@ -183,9 +190,7 @@ public partial class DeployViewModel : ObservableObject
             CanDeploy = _currentPlan.HasChanges && !_currentPlan.IsBlocked;
             if (_currentPlan.IsBlocked)
             {
-                StatusText = string.Format(
-                    LocalizationService.Instance["Status_AnalyzeBlocked"], _currentPlan.Blockers.Count);
-                BlockedText = StatusText;
+                StatusText = BlockedText;
                 _logAction($"[{DateTime.Now:HH:mm:ss}] [ERROR] {StatusText}", LogLevel.Error);
                 foreach (var blocker in _currentPlan.Blockers)
                     _logAction($"[{DateTime.Now:HH:mm:ss}] [ERROR]   {blocker.BlockerMessage}", LogLevel.Error);

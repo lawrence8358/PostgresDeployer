@@ -89,6 +89,7 @@
   <data name="Diff_ReplaceView_CascadeCaution" xml:space="preserve"><value>注意：DROP VIEW "{0}" CASCADE 會連帶刪除「不在 schema 目錄中」的相依物件，部署後不會重建：{1}</value></data>
   <data name="Diff_ReplaceView_CascadeBlocked" xml:space="preserve"><value>已阻擋：DROP VIEW "{0}" CASCADE 會連帶刪除「不在 schema 目錄中」的相依物件，部署後不會重建：{1}。建議將這些物件的定義檔納入 schema 目錄；若確定要刪除，請明確放行：CLI 加 --allow-cascade-drop、JSON 設定檔 options 設定 "allowCascadeDrop": true，或在 WPF 設定頁勾選「允許 CASCADE 刪除 schema 目錄外的 View」。</value></data>
   <data name="Parse_MissingSemicolon" xml:space="preserve"><value>第 {0} 行：此處開始了新的陳述式（{1}），但前一個陳述式結尾缺少分號 ';'</value></data>
+  <data name="Parse_IndexMissingCloseParen" xml:space="preserve"><value>索引 "{0}" 的欄位清單缺少右括號。</value></data>
   <data name="Deploy_FailedAt" xml:space="preserve"><value>失敗位置：{0}</value></data>
   <data name="Deploy_FailedAtLine" xml:space="preserve"><value>失敗位置：{0}（第 {1} 行）</value></data>
   <data name="Diff_AddFK" xml:space="preserve"><value>新增外鍵 "{0}" ({1}) → "{2}"</value></data>

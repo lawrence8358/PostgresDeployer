@@ -512,7 +512,7 @@ public class SqlFileParser : ISqlFileParser
         var closeParen = SqlTextScanner.FindMatchingParen(stmt.Masked, openParen);
         if (closeParen < 0)
             throw new InvalidOperationException(
-                $"索引 \"{header.Groups["name"].Value}\" 的欄位清單缺少右括號。");
+                CoreStrings.Format("Parse_IndexMissingCloseParen", header.Groups["name"].Value));
 
         var index = new IndexDefinition
         {

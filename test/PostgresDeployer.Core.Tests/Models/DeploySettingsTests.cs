@@ -70,4 +70,26 @@ public class DeploySettingsTests
             File.Delete(tempFile);
         }
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Json_RoundTrip_PreservesAllowCascadeDrop(bool value)
+    {
+        var original = new DeploySettings { Options = new DeployOptions { AllowCascadeDrop = value } };
+
+        var json = original.ToJson();
+        var restored = DeploySettings.FromJson(json);
+
+        Assert.Contains($"\"allowCascadeDrop\": {(value ? "true" : "false")}", json);
+        Assert.Equal(value, restored.Options.AllowCascadeDrop);
+    }
+
+    [Fact]
+    public void FromJson_WithoutAllowCascadeDrop_DefaultsToFalse()
+    {
+        var settings = DeploySettings.FromJson("""{ "options": { "stopOnError": true } }""");
+
+        Assert.False(settings.Options.AllowCascadeDrop);
+    }
 }

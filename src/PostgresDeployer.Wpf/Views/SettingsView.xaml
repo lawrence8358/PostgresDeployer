@@ -277,7 +277,11 @@
                                   IsChecked="{Binding StopOnError}"
                                   Margin="0,0,0,8"/>
                         <CheckBox Content="{l:Loc Settings_CreateDbIfNotExists}"
-                                  IsChecked="{Binding CreateDatabaseIfNotExists}"/>
+                                  IsChecked="{Binding CreateDatabaseIfNotExists}"
+                                  Margin="0,0,0,8"/>
+                        <CheckBox Content="{l:Loc Settings_AllowCascadeDrop}"
+                                  IsChecked="{Binding AllowCascadeDrop}"
+                                  ToolTip="{l:Loc Settings_AllowCascadeDropTip}"/>
                     </StackPanel>
                 </StackPanel>
             </hc:Card>

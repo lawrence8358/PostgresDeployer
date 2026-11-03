@@ -218,4 +218,68 @@ public class SettingsMergerTests
 
         Assert.False(settings.Options.CreateDatabaseIfNotExists);
     }
+
+    // ═══ AllowCascadeDrop ═══
+
+    private static string WriteTempConfig(bool allowCascadeDrop)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"settings-merger-test-{Guid.NewGuid()}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "connection": { "host": "localhost", "port": 5432, "database": "testdb", "username": "u", "password": "" },
+              "paths": { "schema": "", "initData": "" },
+              "extensions": [],
+              "options": { "allowCascadeDrop": {{(allowCascadeDrop ? "true" : "false")}} }
+            }
+            """);
+        return path;
+    }
+
+    [Fact]
+    public void Merge_AllowCascadeDrop_DefaultIsFalse()
+    {
+        var settings = SettingsMerger.Merge(new CliArgs { Database = "mydb" });
+
+        Assert.False(settings.Options.AllowCascadeDrop);
+    }
+
+    [Fact]
+    public void Merge_CliAllowCascadeDrop_SetsOptionTrue()
+    {
+        var settings = SettingsMerger.Merge(new CliArgs { Database = "mydb", AllowCascadeDrop = true });
+
+        Assert.True(settings.Options.AllowCascadeDrop);
+    }
+
+    [Fact]
+    public void Merge_ConfigAllowCascadeDrop_KeptWhenCliFlagNotGiven()
+    {
+        var path = WriteTempConfig(allowCascadeDrop: true);
+        try
+        {
+            var settings = SettingsMerger.Merge(new CliArgs { ConfigPath = path });
+
+            Assert.True(settings.Options.AllowCascadeDrop);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Merge_CliAllowCascadeDrop_OverridesConfigFalse()
+    {
+        var path = WriteTempConfig(allowCascadeDrop: false);
+        try
+        {
+            var settings = SettingsMerger.Merge(new CliArgs { ConfigPath = path, AllowCascadeDrop = true });
+
+            Assert.True(settings.Options.AllowCascadeDrop);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

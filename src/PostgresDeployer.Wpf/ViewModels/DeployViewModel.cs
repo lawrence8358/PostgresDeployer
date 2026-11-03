@@ -22,6 +22,8 @@ public partial class DeployViewModel : ObservableObject
     [ObservableProperty] private string statusText = LocalizationService.Instance["Status_Ready"];
     [ObservableProperty] private bool isDeploying;
     [ObservableProperty] private bool canDeploy;
+    [ObservableProperty] private bool isBlocked;
+    [ObservableProperty] private string blockedText = "";
 
     private bool _isAnalyzing;
 
@@ -43,6 +45,7 @@ public partial class DeployViewModel : ObservableObject
         [ChangeGroupType.TableChanges] = "Group_TableChanges",
         [ChangeGroupType.Indexes] = "Group_Indexes",
         [ChangeGroupType.Cautions] = "Group_Cautions",
+        [ChangeGroupType.Blockers] = "Group_Blockers",
     };
 
     private static ChangeGroupType ResolveGroupType(string coreName) =>
@@ -71,6 +74,9 @@ public partial class DeployViewModel : ObservableObject
         ProgressValue = 0;
         ChangeGroups.Clear();
         SelectedSql = "";
+        CanDeploy = false;
+        IsBlocked = false;
+        BlockedText = "";
 
         try
         {
@@ -152,10 +158,44 @@ public partial class DeployViewModel : ObservableObject
                 ChangeGroups.Add(cautionGroup);
             }
 
-            CanDeploy = _currentPlan.HasChanges;
-            StatusText = string.Format(
-                LocalizationService.Instance["Status_AnalyzeComplete"],
-                _currentPlan.TotalStatements, _currentPlan.Cautions.Count);
+            // 阻擋項目群組（置頂顯示）：CASCADE 會刪除 schema 目錄外的物件，部署不得執行
+            if (_currentPlan.IsBlocked)
+            {
+                var blockerGroup = new ChangeGroupItem
+                {
+                    GroupType = ChangeGroupType.Blockers,
+                    GroupName = LocalizationService.Instance["Group_Blockers"],
+                    Count = _currentPlan.Blockers.Count
+                };
+                foreach (var blocker in _currentPlan.Blockers)
+                {
+                    blockerGroup.Items.Add(new ChangeItem
+                    {
+                        Type = blocker.Type,
+                        Description = $"⛔ {blocker.BlockerMessage}",
+                        Sql = blocker.Sql
+                    });
+                }
+                ChangeGroups.Insert(0, blockerGroup);
+            }
+
+            IsBlocked = _currentPlan.IsBlocked;
+            CanDeploy = _currentPlan.HasChanges && !_currentPlan.IsBlocked;
+            if (_currentPlan.IsBlocked)
+            {
+                StatusText = string.Format(
+                    LocalizationService.Instance["Status_AnalyzeBlocked"], _currentPlan.Blockers.Count);
+                BlockedText = StatusText;
+                _logAction($"[{DateTime.Now:HH:mm:ss}] [ERROR] {StatusText}", LogLevel.Error);
+                foreach (var blocker in _currentPlan.Blockers)
+                    _logAction($"[{DateTime.Now:HH:mm:ss}] [ERROR]   {blocker.BlockerMessage}", LogLevel.Error);
+            }
+            else
+            {
+                StatusText = string.Format(
+                    LocalizationService.Instance["Status_AnalyzeComplete"],
+                    _currentPlan.TotalStatements, _currentPlan.Cautions.Count);
+            }
         }
         catch (Exception ex)
         {
@@ -171,7 +211,7 @@ public partial class DeployViewModel : ObservableObject
     [RelayCommand]
     private async Task DeployAsync()
     {
-        if (_currentPlan == null || !CanDeploy || IsDeploying) return;
+        if (_currentPlan == null || !CanDeploy || IsDeploying || _currentPlan.IsBlocked) return;
 
         var confirmed = _dialog.Confirm(
             LocalizationService.Instance["Dialog_ConfirmDeploy"],
@@ -291,7 +331,8 @@ public enum ChangeGroupType
     TableChanges,
     Indexes,
     Cautions,
-    Other
+    Other,
+    Blockers
 }
 
 public class ChangeGroupItem

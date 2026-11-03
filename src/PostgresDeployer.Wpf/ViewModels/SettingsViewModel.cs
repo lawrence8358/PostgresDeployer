@@ -34,6 +34,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool executeSeedData = true;
     [ObservableProperty] private bool stopOnError = true;
     [ObservableProperty] private bool createDatabaseIfNotExists = false;
+    [ObservableProperty] private bool allowCascadeDrop = false;
 
     // ═══ 狀態 ═══
     [ObservableProperty] private string connectionStatus = "";
@@ -253,7 +254,8 @@ public partial class SettingsViewModel : ObservableObject
             {
                 ExecuteSeedData = ExecuteSeedData,
                 StopOnError = StopOnError,
-                CreateDatabaseIfNotExists = CreateDatabaseIfNotExists
+                CreateDatabaseIfNotExists = CreateDatabaseIfNotExists,
+                AllowCascadeDrop = AllowCascadeDrop
             }
         };
     }
@@ -284,5 +286,6 @@ public partial class SettingsViewModel : ObservableObject
         ExecuteSeedData = settings.Options.ExecuteSeedData;
         StopOnError = settings.Options.StopOnError;
         CreateDatabaseIfNotExists = settings.Options.CreateDatabaseIfNotExists;
+        AllowCascadeDrop = settings.Options.AllowCascadeDrop;
     }
 }

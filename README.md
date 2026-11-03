@@ -43,6 +43,7 @@ PostgresDeployer takes the **desired state** approach:
 - Safe, transaction-based deployment with automatic rollback on failure
 - Dry-run mode to preview changes without applying them
 - Caution warnings for potentially destructive operations
+- Deployment is blocked (exit code 1) when a `DROP VIEW ... CASCADE` would drop views that are not in the schema directory — opt in with `--allow-cascade-drop`
 - Seed data support via MERGE statements
 - PostgreSQL extension management (e.g., `pgcrypto`)
 - CLI for scripted and CI/CD deployments
@@ -175,6 +176,7 @@ All commands accept connection parameters that override the config file:
 | `--only` | Deploy only `tables`, `views`, `seeds`, or `all` (default: `all`) |
 | `--log-file` | Write deployment log to file |
 | `--stop-on-error` | Stop deployment if any group fails (default: true) |
+| `--allow-cascade-drop` | Allow `DROP VIEW ... CASCADE` to drop dependent views that are not in the schema directory (otherwise the deployment is blocked, see [Blocked Deployments](#blocked-deployments-cascade-drop-outside-the-schema-directory)) |
 | `--schema` | Schema DDL directory path (contains Tables/, Views/, Functions/, etc.) |
 | `--init-data` | Seed data directory path |
 | `--extensions` | PostgreSQL extensions to ensure (comma-separated) |
@@ -194,6 +196,7 @@ This includes all SQL statements in execution order — extensions, table change
 | Option | Description |
 |--------|-------------|
 | `--output` / `-o` | Write diff report to file |
+| `--allow-cascade-drop` | Report CASCADE drops outside the schema directory as cautions instead of blockers |
 
 ### Configuration File
 
@@ -216,7 +219,8 @@ Generate a config file with `pgdeploy init`, then edit to match your environment
   "options": {
     "executeSeedData": true,
     "stopOnError": true,
-    "createDatabaseIfNotExists": false
+    "createDatabaseIfNotExists": false,
+    "allowCascadeDrop": false
   }
 }
 ```
@@ -253,6 +257,25 @@ When `--create-db-if-not-exists` is set (or `"createDatabaseIfNotExists": true` 
 - **`test-connection`**: Test the server connection (without specifying the target database). If the server is reachable, it reports whether the target database already exists or will be created on the next deploy.
 
 > **Note**: The PostgreSQL user must have `CREATEDB` privilege for automatic database creation to succeed.
+
+### Blocked Deployments: CASCADE Drop Outside the Schema Directory
+
+When a view's column list changes in a way `CREATE OR REPLACE VIEW` cannot handle, PostgresDeployer drops it first with `DROP VIEW ... CASCADE` (group `Drop Views (Pre-Alter)`). `CASCADE` also drops every view / materialized view that depends on it — in any schema. Views defined in the schema directory are recreated afterwards, but **objects that are not in the schema directory (e.g. views someone created directly in the database) would be lost**.
+
+By default PostgresDeployer detects this during analysis and **blocks the deployment**:
+
+| Command | Result when blocked |
+|---------|---------------------|
+| `deploy --dry-run` | Plan is printed with a `[BLOCKED]` section (written to stderr); exit code **1** |
+| `deploy` / `deploy --yes` | Nothing is executed and no RunScript is written; exit code **1** |
+| `diff` | Report lists the `[BLOCKED]` items; exit code **1** |
+
+A non-zero exit code makes the CI/CD step fail, so the pipeline never silently drops objects it does not manage.
+
+How to resolve:
+
+1. **Recommended** — add the definition files of the listed views to the schema directory, so they are recreated after the drop.
+2. If losing those objects is acceptable, explicitly allow it with `--allow-cascade-drop`, `"allowCascadeDrop": true` in the config `options`, or the **Allow CASCADE to drop views outside the schema directory** option in the WPF settings. The deployment then runs and the affected objects are listed as `[!]` cautions.
 
 ### CI/CD Integration
 
@@ -335,6 +358,7 @@ The WPF desktop application provides an interactive interface for deploying and 
 - **Run init data scripts** — whether to execute seed data on deploy
 - **Stop on error** — halt deployment if any group fails
 - **Auto-create database if not exists** — automatically create the target database when it does not exist; the Test Connection button will verify the server connection and report whether the database needs to be created
+- **Allow CASCADE to drop views outside the schema directory** — off by default; when a deployment would drop such views, the Deploy page shows a highlighted **Blocked** group and the Deploy button is disabled. Re-run Analyze after changing this option (see [Blocked Deployments](#blocked-deployments-cascade-drop-outside-the-schema-directory))
 
 The language can be switched at runtime (English / 繁體中文) from the sidebar.
 
@@ -359,7 +383,9 @@ All changes are detected automatically and applied in the correct order:
 | `[+VCOL]` | Extend View | Columns only appended to the end of an existing view (existing column names and order unchanged) — applied directly with `CREATE OR REPLACE VIEW`, no drop |
 | `[~VIEW]` | Replace View | View columns renamed, removed, reordered or inserted in the middle, or the view depends on a table column whose type will change or which will be dropped (`DROP VIEW ... CASCADE` before table changes, then recreate) |
 
-> **Caution operations** — changes that could result in data loss or deployment failure (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT, creating a unique index on an existing table, `DROP VIEW ... CASCADE` that would also drop dependent views not defined in the schema directory) are flagged with `[!]` warnings and require explicit confirmation before applying.
+> **Caution operations** — changes that could result in data loss or deployment failure (column deletion, primary key changes, type narrowing, adding NOT NULL without a DEFAULT, creating a unique index on an existing table) are flagged with `[!]` warnings and require explicit confirmation before applying.
+>
+> **Blocked operations** — a `DROP VIEW ... CASCADE` that would also drop dependent views not defined in the schema directory is no longer just a caution: the whole deployment is blocked (`[BLOCKED]`, exit code 1) unless you opt in with `--allow-cascade-drop` / `"allowCascadeDrop": true`, in which case it is shown as a `[!]` caution. See [Blocked Deployments](#blocked-deployments-cascade-drop-outside-the-schema-directory).
 
 ## Contributing
 

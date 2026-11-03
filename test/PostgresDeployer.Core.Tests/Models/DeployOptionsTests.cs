@@ -22,4 +22,12 @@ public class DeployOptionsTests
 
         Assert.True(options.CreateDatabaseIfNotExists);
     }
+
+    [Fact]
+    public void AllowCascadeDrop_DefaultIsFalse()
+    {
+        var options = new DeployOptions();
+
+        Assert.False(options.AllowCascadeDrop);
+    }
 }

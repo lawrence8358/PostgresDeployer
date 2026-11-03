@@ -258,7 +258,7 @@ public partial class SettingsViewModel : ObservableObject
         };
     }
 
-    private DeploySettings ToSettingsForSave()
+    public DeploySettings ToSettingsForSave()
     {
         // 密碼儲存至 Windows 認證管理員，不寫入 JSON 設定檔
         var key = WindowsCredentialManager.CredentialKey(Host, Port, Database, Username);

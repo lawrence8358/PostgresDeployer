@@ -3,6 +3,7 @@ namespace PostgresDeployer.Wpf.Services;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PostgresDeployer.Core.Models;
 
 public class AppSettingsService
 {
@@ -29,6 +30,7 @@ public class AppSettingsService
     {
         public List<RecentFile> RecentFiles { get; set; } = [];
         public string? LastConfigPath { get; set; }
+        public DeploySettings? LastSessionSettings { get; set; }
         public double WindowWidth { get; set; } = 960;
         public double WindowHeight { get; set; } = 660;
         public double? WindowLeft { get; set; }

@@ -74,19 +74,33 @@ public class SchemaIntrospector : ISchemaIntrospector
         // ═══ 查詢欄位 ═══
         const string columnSql = """
             SELECT
-                column_name,
-                data_type,
-                udt_name,
-                character_maximum_length,
-                numeric_precision,
-                numeric_scale,
-                is_nullable,
-                column_default,
-                is_identity
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = @tableName
-            ORDER BY ordinal_position
+                c.column_name,
+                c.data_type,
+                c.udt_name,
+                c.character_maximum_length,
+                c.numeric_precision,
+                c.numeric_scale,
+                c.is_nullable,
+                c.column_default,
+                c.is_identity,
+                pgd.description AS column_comment
+            FROM information_schema.columns c
+            LEFT JOIN pg_catalog.pg_namespace pn
+                ON pn.nspname = c.table_schema
+            LEFT JOIN pg_catalog.pg_class pc
+                ON pc.relname = c.table_name
+               AND pc.relnamespace = pn.oid
+            LEFT JOIN pg_catalog.pg_attribute pa
+                ON pa.attrelid = pc.oid
+               AND pa.attname = c.column_name
+               AND pa.attnum > 0
+               AND NOT pa.attisdropped
+            LEFT JOIN pg_catalog.pg_description pgd
+                ON pgd.objoid = pc.oid
+               AND pgd.objsubid = pa.attnum
+            WHERE c.table_schema = 'public'
+              AND c.table_name = @tableName
+            ORDER BY c.ordinal_position
             """;
 
         await using (var cmd = new NpgsqlCommand(columnSql, conn))
@@ -104,6 +118,7 @@ public class SchemaIntrospector : ISchemaIntrospector
                 var isNullable = reader.GetString(6) == "YES";
                 var columnDefault = reader.IsDBNull(7) ? null : reader.GetString(7);
                 var isIdentity = reader.GetString(8) == "YES";
+                var columnComment = reader.IsDBNull(9) ? null : reader.GetString(9);
 
                 var typeInfo = TypeNormalizer.NormalizeFromDb(
                     dataType, udtName, charMaxLen, numPrecision, numScale);
@@ -122,51 +137,27 @@ public class SchemaIntrospector : ISchemaIntrospector
                     IsNullable = isNullable,
                     HasDefault = normalizedDefault != null,
                     DefaultValue = normalizedDefault,
-                    IsIdentity = isIdentity
+                    IsIdentity = isIdentity,
+                    Comment = columnComment
                 });
             }
         }
 
-        const string commentSql = """
+        const string tableCommentSql = """
             SELECT
-                obj_description(c.oid, 'pg_class') AS table_comment,
-                a.attname AS column_name,
-                col_description(c.oid, a.attnum) AS column_comment
+                obj_description(c.oid, 'pg_class') AS table_comment
             FROM pg_class c
-            LEFT JOIN pg_attribute a
-                ON a.attrelid = c.oid
-               AND a.attnum > 0
-               AND NOT a.attisdropped
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'public'
               AND c.relname = @tableName
               AND c.relkind = 'r'
-            ORDER BY a.attnum
             """;
 
-        await using (var cmd = new NpgsqlCommand(commentSql, conn))
+        await using (var cmd = new NpgsqlCommand(tableCommentSql, conn))
         {
             cmd.Parameters.AddWithValue("@tableName", tableName);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-
-            var columnsByName = schema.Columns.ToDictionary(c => c.Name, StringComparer.Ordinal);
-            bool tableCommentAssigned = false;
-
-            while (await reader.ReadAsync(ct))
-            {
-                if (!tableCommentAssigned)
-                {
-                    schema.Comment = reader.IsDBNull(0) ? null : reader.GetString(0);
-                    tableCommentAssigned = true;
-                }
-
-                if (reader.IsDBNull(1))
-                    continue;
-
-                var columnName = reader.GetString(1);
-                if (columnsByName.TryGetValue(columnName, out var column))
-                    column.Comment = reader.IsDBNull(2) ? null : reader.GetString(2);
-            }
+            var result = await cmd.ExecuteScalarAsync(ct);
+            schema.Comment = result is DBNull or null ? null : (string)result;
         }
 
         // ═══ 查詢主鍵 ═══

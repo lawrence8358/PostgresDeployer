@@ -67,6 +67,8 @@
   <data name="Diff_AlterType_Caution" xml:space="preserve"><value>注意: 欄位 "{0}" 型別縮窄 {1} → {2}，可能導致資料截斷</value></data>
   <data name="Diff_AlterNullable" xml:space="preserve"><value>變更 Nullable "{0}": {1} → {2}</value></data>
   <data name="Diff_AlterDefault" xml:space="preserve"><value>變更 Default "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterTableComment" xml:space="preserve"><value>變更資料表註解 "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterColumnComment" xml:space="preserve"><value>變更欄位註解 "{0}": {1} → {2}</value></data>
   <data name="Diff_None" xml:space="preserve"><value>(無)</value></data>
   <data name="Diff_DropColumn" xml:space="preserve"><value>刪除欄位 "{0}"（不在 SQL 定義檔中）</value></data>
   <data name="Diff_DropColumn_Caution" xml:space="preserve"><value>注意: 欄位 "{0}" 將被刪除，資料將永久遺失</value></data>

@@ -34,6 +34,7 @@ public class SchemaDiffer : ISchemaDiffer
                 continue;
             }
 
+            CompareTableComment(desiredTable, actualTable, changes);
             CompareColumns(desiredTable, actualTable, changes);
             ComparePrimaryKey(desiredTable, actualTable, changes);
             CompareIndexes(desiredTable, actualTable, changes);
@@ -41,6 +42,24 @@ public class SchemaDiffer : ISchemaDiffer
         }
 
         return changes;
+    }
+
+    private void CompareTableComment(TableSchema desired, TableSchema actual, List<SchemaChange> changes)
+    {
+        if (string.Equals(desired.Comment, actual.Comment, StringComparison.Ordinal))
+            return;
+
+        var none = CoreStrings.Get("Diff_None");
+        changes.Add(new SchemaChange
+        {
+            Type = ChangeType.AlterTableComment,
+            EntityName = desired.TableName,
+            Description = CoreStrings.Format(
+                "Diff_AlterTableComment",
+                desired.TableName,
+                actual.Comment ?? none,
+                desired.Comment ?? none)
+        });
     }
 
     private void CompareColumns(TableSchema desired, TableSchema actual, List<SchemaChange> changes)
@@ -123,6 +142,22 @@ public class SchemaDiffer : ISchemaDiffer
                     ColumnName = desiredCol.Name,
                     Description = CoreStrings.Format("Diff_AlterDefault",
                         desiredCol.Name, actualDefault ?? none, desiredDefault ?? none)
+                });
+            }
+
+            if (!string.Equals(desiredCol.Comment, actualCol.Comment, StringComparison.Ordinal))
+            {
+                var none = CoreStrings.Get("Diff_None");
+                changes.Add(new SchemaChange
+                {
+                    Type = ChangeType.AlterColumnComment,
+                    EntityName = desired.TableName,
+                    ColumnName = desiredCol.Name,
+                    Description = CoreStrings.Format(
+                        "Diff_AlterColumnComment",
+                        desiredCol.Name,
+                        actualCol.Comment ?? none,
+                        desiredCol.Comment ?? none)
                 });
             }
         }

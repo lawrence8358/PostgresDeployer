@@ -80,6 +80,20 @@ public class SqlGeneratorTests
     }
 
     [Fact]
+    public void GenerateAlterTableComment_WithText_EscapesSingleQuote()
+    {
+        var sql = _gen.GenerateAlterTableComment("Users", "owner's table");
+        Assert.Equal("COMMENT ON TABLE \"Users\" IS 'owner''s table';", sql);
+    }
+
+    [Fact]
+    public void GenerateAlterColumnComment_Null_RemovesComment()
+    {
+        var sql = _gen.GenerateAlterColumnComment("Users", "Name", null);
+        Assert.Equal("COMMENT ON COLUMN \"Users\".\"Name\" IS NULL;", sql);
+    }
+
+    [Fact]
     public void GenerateCreateIndex_SimpleIndex_CorrectSql()
     {
         var idx = new IndexDefinition

@@ -75,9 +75,18 @@ public partial class App : Application
         }
 
         // 自動載入上次使用的設定檔
-        if (!string.IsNullOrEmpty(settings.LastConfigPath) && File.Exists(settings.LastConfigPath))
+        var vm = _serviceProvider.GetRequiredService<SettingsViewModel>();
+
+        if (settings.LastSessionSettings != null)
         {
-            var vm = _serviceProvider.GetRequiredService<SettingsViewModel>();
+            try
+            {
+                vm.FromSettings(settings.LastSessionSettings);
+            }
+            catch (Exception) { /* 忽略載入失敗 */ }
+        }
+        else if (!string.IsNullOrEmpty(settings.LastConfigPath) && File.Exists(settings.LastConfigPath))
+        {
             try
             {
                 var deploySettings = DeploySettings.LoadFromFile(settings.LastConfigPath);
@@ -96,6 +105,7 @@ public partial class App : Application
         {
             var appSettings = _serviceProvider.GetRequiredService<AppSettingsService>();
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+            var settingsVm = _serviceProvider.GetRequiredService<SettingsViewModel>();
             var settings = appSettings.Load();
 
             // 最大化時記錄 RestoreBounds，以便下次還原後能回到正確尺寸
@@ -120,6 +130,9 @@ public partial class App : Application
 
             // 儲存使用者選擇的語系偏好
             settings.Language = LocalizationService.Instance.CurrentLanguageCode;
+
+            // 儲存本次最後使用的設定；密碼仍寫入 Windows Credential Manager
+            settings.LastSessionSettings = settingsVm.ToSettingsForSave();
 
             appSettings.Save(settings);
         }

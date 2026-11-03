@@ -67,6 +67,8 @@
   <data name="Diff_AlterType_Caution" xml:space="preserve"><value>Warning: type narrowing "{0}": {1} → {2} — may cause data truncation</value></data>
   <data name="Diff_AlterNullable" xml:space="preserve"><value>Alter nullable "{0}": {1} → {2}</value></data>
   <data name="Diff_AlterDefault" xml:space="preserve"><value>Alter default "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterTableComment" xml:space="preserve"><value>Alter table comment "{0}": {1} → {2}</value></data>
+  <data name="Diff_AlterColumnComment" xml:space="preserve"><value>Alter column comment "{0}": {1} → {2}</value></data>
   <data name="Diff_None" xml:space="preserve"><value>(none)</value></data>
   <data name="Diff_DropColumn" xml:space="preserve"><value>Drop column "{0}" (not in SQL definition)</value></data>
   <data name="Diff_DropColumn_Caution" xml:space="preserve"><value>Warning: column "{0}" will be dropped — data will be permanently lost</value></data>

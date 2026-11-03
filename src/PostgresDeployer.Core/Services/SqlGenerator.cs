@@ -47,6 +47,16 @@ public class SqlGenerator : ISqlGenerator
         return $"ALTER TABLE \"{tableName}\" ALTER COLUMN \"{columnName}\" SET DEFAULT {defaultValue};";
     }
 
+    public string GenerateAlterTableComment(string tableName, string? comment)
+    {
+        return $"COMMENT ON TABLE \"{tableName}\" IS {ToSqlCommentLiteral(comment)};";
+    }
+
+    public string GenerateAlterColumnComment(string tableName, string columnName, string? comment)
+    {
+        return $"COMMENT ON COLUMN \"{tableName}\".\"{columnName}\" IS {ToSqlCommentLiteral(comment)};";
+    }
+
     public string GenerateCreateIndex(string tableName, IndexDefinition index)
     {
         var unique = index.IsUnique ? "UNIQUE " : "";
@@ -97,5 +107,13 @@ public class SqlGenerator : ISqlGenerator
     public string GenerateDropForeignKey(string tableName, string constraintName)
     {
         return $"ALTER TABLE \"{tableName}\" DROP CONSTRAINT \"{constraintName}\";";
+    }
+
+    private static string ToSqlCommentLiteral(string? comment)
+    {
+        if (comment == null)
+            return "NULL";
+
+        return $"'{comment.Replace("'", "''")}'";
     }
 }

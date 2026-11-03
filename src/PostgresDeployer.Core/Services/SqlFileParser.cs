@@ -46,6 +46,14 @@ public class SqlFileParser : ISqlFileParser
         @"CONSTRAINT\s+""([^""]+)""\s+FOREIGN\s+KEY\s*\(([^)]+)\)\s+REFERENCES\s+""([^""]+)""\s*\(([^)]+)\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION))?(?:\s+ON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION))?",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex TableCommentPattern = new(
+        @"COMMENT\s+ON\s+TABLE\s+(?:(?:""[^""]+""|\w+)\.)?""(?<table>[^""]+)""\s+IS\s+(?<value>NULL|'(?:''|[^'])*')\s*;",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex ColumnCommentPattern = new(
+        @"COMMENT\s+ON\s+COLUMN\s+(?:(?:""[^""]+""|\w+)\.)?""(?<table>[^""]+)""\.""(?<column>[^""]+)""\s+IS\s+(?<value>NULL|'(?:''|[^'])*')\s*;",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public TableSchema ParseTableFile(string filePath)
     {
         var content = File.ReadAllText(filePath);
@@ -148,6 +156,8 @@ public class SqlFileParser : ISqlFileParser
                 Columns = indexCols
             });
         }
+
+        ParseComments(sql, schema);
 
         return schema;
     }
@@ -494,5 +504,35 @@ public class SqlFileParser : ISqlFileParser
             })
             .Where(c => c.Name.Length > 0)
             .ToList();
+    }
+
+    private static void ParseComments(string sql, TableSchema schema)
+    {
+        foreach (Match match in TableCommentPattern.Matches(sql))
+        {
+            if (string.Equals(match.Groups["table"].Value, schema.TableName, StringComparison.Ordinal))
+                schema.Comment = ParseCommentValue(match.Groups["value"].Value);
+        }
+
+        var columnsByName = schema.Columns.ToDictionary(c => c.Name, StringComparer.Ordinal);
+        foreach (Match match in ColumnCommentPattern.Matches(sql))
+        {
+            if (!string.Equals(match.Groups["table"].Value, schema.TableName, StringComparison.Ordinal))
+                continue;
+
+            if (columnsByName.TryGetValue(match.Groups["column"].Value, out var column))
+                column.Comment = ParseCommentValue(match.Groups["value"].Value);
+        }
+    }
+
+    private static string? ParseCommentValue(string sqlLiteral)
+    {
+        if (sqlLiteral.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (sqlLiteral.Length >= 2 && sqlLiteral[0] == '\'' && sqlLiteral[^1] == '\'')
+            return sqlLiteral[1..^1].Replace("''", "'");
+
+        return sqlLiteral;
     }
 }

@@ -20,6 +20,12 @@ public interface ISqlGenerator
     /// <summary>產生 ALTER TABLE ALTER COLUMN SET/DROP DEFAULT 語句</summary>
     string GenerateAlterColumnDefault(string tableName, string columnName, string? defaultValue);
 
+    /// <summary>產生 COMMENT ON TABLE 語句</summary>
+    string GenerateAlterTableComment(string tableName, string? comment);
+
+    /// <summary>產生 COMMENT ON COLUMN 語句</summary>
+    string GenerateAlterColumnComment(string tableName, string columnName, string? comment);
+
     /// <summary>產生 CREATE INDEX 語句</summary>
     string GenerateCreateIndex(string tableName, IndexDefinition index);
 

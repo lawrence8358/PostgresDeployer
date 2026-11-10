@@ -106,8 +106,10 @@ public class DeployExecutor : IDeployExecutor
             if (ex is NpgsqlException npEx)
             {
                 var sqlState = npEx.SqlState;
-                // 42704 = undefined_object (type doesn't exist), 42883 = undefined_function
-                if (sqlState is "42704" or "42883")
+                // 42704 = undefined_object，只有「型別不存在」才可能是缺 extension（constraint／index 不存在與 extension 無關）
+                // 42883 = undefined_function
+                if ((sqlState == "42704" && ex.Message.Contains("type \"", StringComparison.Ordinal))
+                    || sqlState == "42883")
                 {
                     errorMessage = ex.Message + "\n" + CoreStrings.Get("Deploy_ExtensionHint");
                 }

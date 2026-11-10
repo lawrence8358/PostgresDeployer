@@ -120,4 +120,65 @@ public class DeployOrchestratorIntegrationTests
         var viewChange = Assert.Single(plan.Groups.Single(g => g.Name == "Views").Changes);
         Assert.Equal(ChangeType.ExtendView, viewChange.Type);
     }
+
+    /// <summary>
+    /// 欄位連同其外鍵一起移除（並改用新欄位、新外鍵）：PG 的 DROP COLUMN 會自動刪除該欄位上的外鍵，
+    /// 所以 DROP CONSTRAINT 必須排在 DROP COLUMN 之前，否則報 42704 constraint does not exist。
+    /// </summary>
+    [PostgresFact]
+    public async Task ExecuteAsync_DropColumnTogetherWithItsForeignKey_Succeeds()
+    {
+        await using var db = await TestDatabase.CreateAsync();
+        using var dir = new TempSchemaDirectory();
+        await db.ExecuteAsync("""
+            CREATE TABLE "Service" ("Id" UUID NOT NULL, CONSTRAINT "PK_Service" PRIMARY KEY ("Id"));
+            CREATE TABLE "Snapshot" (
+                "Id" UUID NOT NULL,
+                "ServiceId" UUID NOT NULL,
+                "Tool" VARCHAR(20) NOT NULL,
+                CONSTRAINT "PK_Snapshot" PRIMARY KEY ("Id"),
+                CONSTRAINT "FK_Snapshot_ServiceId" FOREIGN KEY ("ServiceId") REFERENCES "Service"("Id") ON DELETE CASCADE
+            );
+            CREATE UNIQUE INDEX "UIX_Snapshot_ServiceId_Tool" ON "Snapshot"("ServiceId", "Tool");
+            """);
+
+        dir.Write("Tables/Service.sql", """
+            CREATE TABLE "Service" ("Id" UUID NOT NULL, CONSTRAINT "PK_Service" PRIMARY KEY ("Id"));
+            """);
+        dir.Write("Tables/Target.sql", """
+            CREATE TABLE "Target"
+            (
+                "Id"        UUID NOT NULL,
+                "ServiceId" UUID NOT NULL,
+                CONSTRAINT "PK_Target" PRIMARY KEY ("Id"),
+                CONSTRAINT "FK_Target_ServiceId" FOREIGN KEY ("ServiceId") REFERENCES "Service"("Id") ON DELETE CASCADE
+            );
+            """);
+        dir.Write("Tables/Snapshot.sql", """
+            CREATE TABLE "Snapshot"
+            (
+                "Id"           UUID        NOT NULL,
+                "TargetId"     UUID        NOT NULL,
+                "Tool"         VARCHAR(20) NOT NULL,
+                CONSTRAINT "PK_Snapshot" PRIMARY KEY ("Id"),
+                CONSTRAINT "FK_Snapshot_TargetId" FOREIGN KEY ("TargetId") REFERENCES "Target"("Id") ON DELETE CASCADE
+            );
+
+            CREATE UNIQUE INDEX "UIX_Snapshot_TargetId_Tool" ON public."Snapshot"("TargetId", "Tool");
+            """);
+
+        var orchestrator = CreateOrchestrator();
+        var settings = db.CreateSettings(dir.Path);
+        var plan = await orchestrator.AnalyzeAsync(settings);
+        var results = await orchestrator.ExecuteAsync(settings, plan);
+
+        Assert.All(results, r => Assert.True(r.Success, $"{r.GroupName}: {r.ErrorMessage}"));
+        Assert.Equal(0L, await db.ScalarAsync<long>("""
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_name = 'Snapshot' AND column_name = 'ServiceId'
+            """));
+        Assert.Equal(1L, await db.ScalarAsync<long>("""
+            SELECT count(*) FROM pg_constraint WHERE conname = 'FK_Snapshot_TargetId'
+            """));
+    }
 }

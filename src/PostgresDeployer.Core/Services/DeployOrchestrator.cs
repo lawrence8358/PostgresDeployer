@@ -204,6 +204,12 @@ public class DeployOrchestrator : IDeployOrchestrator
         var alterGroup  = new DeployGroup { Name = DeployGroupNames.TableChanges };
         var indexGroup  = new DeployGroup { Name = DeployGroupNames.Indexes };
 
+        // 約束的 DROP 必須排在 Table Changes 群組最前面：PG 的 DROP COLUMN 會自動刪除該欄位上的外鍵／主鍵，
+        // 若先 DROP COLUMN 再 DROP CONSTRAINT 會報 42704 constraint does not exist。
+        // 外鍵先於主鍵，避免主鍵仍被其他表（同批要刪除的）外鍵依賴。
+        var fkDropStatements = new List<string>();
+        var pkDropStatements = new List<string>();
+
         foreach (var change in changes)
         {
             ct.ThrowIfCancellationRequested();
@@ -351,7 +357,7 @@ public class DeployOrchestrator : IDeployOrchestrator
                     var desiredPk = desiredTable.PrimaryKey;
                     if (actualPk?.ConstraintName != null)
                     {
-                        alterGroup.Statements.Add(
+                        pkDropStatements.Add(
                             generator.GenerateDropPrimaryKey(change.EntityName, actualPk.ConstraintName));
                     }
                     if (desiredPk != null)
@@ -379,7 +385,7 @@ public class DeployOrchestrator : IDeployOrchestrator
 
                 case ChangeType.DropForeignKey:
                     change.Sql = generator.GenerateDropForeignKey(change.EntityName, change.ColumnName!);
-                    alterGroup.Statements.Add(change.Sql);
+                    fkDropStatements.Add(change.Sql);
                     alterGroup.Changes.Add(change);
                     break;
 
@@ -390,7 +396,7 @@ public class DeployOrchestrator : IDeployOrchestrator
                     var fk = table.ForeignKeys.FirstOrDefault(f => f.ConstraintName == change.ColumnName);
                     if (fk != null)
                     {
-                        alterGroup.Statements.Add(
+                        fkDropStatements.Add(
                             generator.GenerateDropForeignKey(change.EntityName, change.ColumnName!));
                         var addSql = generator.GenerateAddForeignKey(change.EntityName, fk);
                         alterGroup.Statements.Add(addSql);
@@ -406,6 +412,8 @@ public class DeployOrchestrator : IDeployOrchestrator
                     break;
             }
         }
+
+        alterGroup.Statements.InsertRange(0, fkDropStatements.Concat(pkDropStatements));
 
         if (createGroup.Statements.Count > 0) plan.Groups.Add(createGroup);
 

@@ -194,6 +194,8 @@ Orchestrator 以 `(Schema == "public", Name)` 比對 schema 目錄中的 View，
 
 > `ChangeType` 新增成員一律加在 enum 最後，避免改變既有成員的數值。
 
+> **Table Changes 群組的語句順序**：外鍵的 `DROP CONSTRAINT`（`DropForeignKey`、`RecreateForeignKey` 的 DROP 部分）排最前，接著是主鍵的 `DROP CONSTRAINT`（`RecreatePrimaryKey` 的 DROP 部分），其餘語句依差異順序在後。原因是 PostgreSQL 的 `DROP COLUMN` 會自動刪除該欄位上的約束，若先刪欄位再刪約束會報 `42704 constraint does not exist`。
+
 ## PathSettings 路徑結構
 
 `schema` 與 `initData` 均為使用者提供的**絕對路徑**，由 CLI 參數（`--schema` / `--init-data`）、config 檔或 WPF 資料夾選擇器指定。不支援相對路徑。
